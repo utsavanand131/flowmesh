@@ -5,14 +5,23 @@ import grpc
 import order_pb2
 import order_pb2_grpc
 
+from order_service import OrderManager
+
+
+order_manager = OrderManager()
+
 
 class OrderService(order_pb2_grpc.OrderServiceServicer):
     def CreateOrder(self, request, context):
-        order_id = "order_123"
+        order = order_manager.create_order(
+            user_id=request.user_id,
+            product_id=request.product_id,
+            quantity=request.quantity,
+        )
 
         return order_pb2.CreateOrderResponse(
-            order_id=order_id,
-            status="PENDING",
+            order_id=order["order_id"],
+            status=order["status"],
         )
 
 
@@ -37,4 +46,3 @@ def serve():
 
 if __name__ == "__main__":
     serve()
-    
