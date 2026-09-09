@@ -4,6 +4,7 @@ package order;
 
 service OrderService {
   rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
+  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
 }
 
 message CreateOrderRequest {
@@ -15,4 +16,16 @@ message CreateOrderRequest {
 message CreateOrderResponse {
   string order_id = 1;
   string status = 2;
+}
+
+message GetOrderRequest {
+  string order_id = 1;
+}
+
+message GetOrderResponse {
+  string order_id = 1;
+  string user_id = 2;
+  string product_id = 3;
+  int32 quantity = 4;
+  string status = 5;
 }

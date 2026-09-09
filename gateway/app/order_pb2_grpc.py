@@ -39,12 +39,23 @@ class OrderServiceStub:
                 request_serializer=order__pb2.CreateOrderRequest.SerializeToString,
                 response_deserializer=order__pb2.CreateOrderResponse.FromString,
                 _registered_method=True)
+        self.GetOrder = channel.unary_unary(
+                '/order.OrderService/GetOrder',
+                request_serializer=order__pb2.GetOrderRequest.SerializeToString,
+                response_deserializer=order__pb2.GetOrderResponse.FromString,
+                _registered_method=True)
 
 
 class OrderServiceServicer:
     """Missing associated documentation comment in .proto file."""
 
     def CreateOrder(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetOrder(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -57,6 +68,11 @@ def add_OrderServiceServicer_to_server(servicer, server):
                     servicer.CreateOrder,
                     request_deserializer=order__pb2.CreateOrderRequest.FromString,
                     response_serializer=order__pb2.CreateOrderResponse.SerializeToString,
+            ),
+            'GetOrder': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetOrder,
+                    request_deserializer=order__pb2.GetOrderRequest.FromString,
+                    response_serializer=order__pb2.GetOrderResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -86,6 +102,33 @@ class OrderService:
             '/order.OrderService/CreateOrder',
             order__pb2.CreateOrderRequest.SerializeToString,
             order__pb2.CreateOrderResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetOrder(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/order.OrderService/GetOrder',
+            order__pb2.GetOrderRequest.SerializeToString,
+            order__pb2.GetOrderResponse.FromString,
             options,
             channel_credentials,
             insecure,

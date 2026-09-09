@@ -24,3 +24,6 @@ class OrderManager:
         self.orders[order_id] = order
 
         return order
+
+    def get_order(self, order_id: str):
+        return self.orders.get(order_id)

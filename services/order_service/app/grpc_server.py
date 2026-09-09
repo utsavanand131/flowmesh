@@ -24,6 +24,23 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
             status=order["status"],
         )
 
+    def GetOrder(self, request, context):
+        order = order_manager.get_order(request.order_id)
+
+        if order is None:
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            context.set_details("Order not found")
+
+            return order_pb2.GetOrderResponse()
+
+        return order_pb2.GetOrderResponse(
+            order_id=order["order_id"],
+            user_id=order["user_id"],
+            product_id=order["product_id"],
+            quantity=order["quantity"],
+            status=order["status"],
+        )
+
 
 def serve():
     server = grpc.server(
