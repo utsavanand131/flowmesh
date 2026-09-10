@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0finventory.proto\x12\tinventory\"9\n\x11\x43heckStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"W\n\x12\x43heckStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12\x61vailable_quantity\x18\x02 \x01(\x05\x12\x11\n\tavailable\x18\x03 \x01(\x08\x32]\n\x10InventoryService\x12I\n\nCheckStock\x12\x1c.inventory.CheckStockRequest\x1a\x1d.inventory.CheckStockResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0finventory.proto\x12\tinventory\"9\n\x11\x43heckStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"W\n\x12\x43heckStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12\x61vailable_quantity\x18\x02 \x01(\x05\x12\x11\n\tavailable\x18\x03 \x01(\x08\";\n\x13ReserveStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"X\n\x14ReserveStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12remaining_quantity\x18\x02 \x01(\x05\x12\x10\n\x08reserved\x18\x03 \x01(\x08\x32\xae\x01\n\x10InventoryService\x12I\n\nCheckStock\x12\x1c.inventory.CheckStockRequest\x1a\x1d.inventory.CheckStockResponse\x12O\n\x0cReserveStock\x12\x1e.inventory.ReserveStockRequest\x1a\x1f.inventory.ReserveStockResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,6 +35,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_CHECKSTOCKREQUEST']._serialized_end=87
   _globals['_CHECKSTOCKRESPONSE']._serialized_start=89
   _globals['_CHECKSTOCKRESPONSE']._serialized_end=176
-  _globals['_INVENTORYSERVICE']._serialized_start=178
-  _globals['_INVENTORYSERVICE']._serialized_end=271
+  _globals['_RESERVESTOCKREQUEST']._serialized_start=178
+  _globals['_RESERVESTOCKREQUEST']._serialized_end=237
+  _globals['_RESERVESTOCKRESPONSE']._serialized_start=239
+  _globals['_RESERVESTOCKRESPONSE']._serialized_end=327
+  _globals['_INVENTORYSERVICE']._serialized_start=330
+  _globals['_INVENTORYSERVICE']._serialized_end=504
 # @@protoc_insertion_point(module_scope)

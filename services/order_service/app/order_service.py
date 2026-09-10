@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from inventory_client import check_stock
+from inventory_client import check_stock, reserve_stock
 from models import Order
 
 
@@ -24,6 +24,14 @@ class OrderManager:
             return None
 
         try:
+            reservation = reserve_stock(
+                product_id=product_id,
+                quantity=quantity,
+            )
+
+            if not reservation["reserved"]:
+                return None
+
             order = Order(
                 order_id=str(uuid.uuid4()),
                 user_id=user_id,
@@ -37,18 +45,6 @@ class OrderManager:
             db.refresh(order)
 
             return order
-
-        except SQLAlchemyError:
-            db.rollback()
-            raise
-
-    def get_order(
-        self,
-        db: Session,
-        order_id: str,
-    ):
-        try:
-            return db.get(Order, order_id)
 
         except SQLAlchemyError:
             db.rollback()

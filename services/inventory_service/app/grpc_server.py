@@ -13,7 +13,9 @@ from inventory_service import InventoryManager
 inventory_manager = InventoryManager()
 
 
-class InventoryService(inventory_pb2_grpc.InventoryServiceServicer):
+class InventoryService(
+    inventory_pb2_grpc.InventoryServiceServicer
+):
     def CheckStock(self, request, context):
         db = SessionLocal()
 
@@ -31,10 +33,63 @@ class InventoryService(inventory_pb2_grpc.InventoryServiceServicer):
             )
 
         except SQLAlchemyError:
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details("Failed to check inventory")
+            context.set_code(
+                grpc.StatusCode.INTERNAL
+            )
+            context.set_details(
+                "Failed to check inventory"
+            )
 
             return inventory_pb2.CheckStockResponse()
+
+        finally:
+            db.close()
+
+    def ReserveStock(self, request, context):
+        db = SessionLocal()
+
+        try:
+            result = inventory_manager.reserve_stock(
+                db=db,
+                product_id=request.product_id,
+                quantity=request.quantity,
+            )
+
+            if not result["reserved"]:
+                context.set_code(
+                    grpc.StatusCode.FAILED_PRECONDITION
+                )
+                context.set_details(
+                    "Insufficient inventory"
+                )
+
+                return inventory_pb2.ReserveStockResponse(
+                    product_id=result["product_id"],
+                    remaining_quantity=result[
+                        "remaining_quantity"
+                    ],
+                    reserved=False,
+                )
+
+            return inventory_pb2.ReserveStockResponse(
+                product_id=result["product_id"],
+                remaining_quantity=result[
+                    "remaining_quantity"
+                ],
+                reserved=True,
+            )
+
+        except SQLAlchemyError:
+            db.rollback()
+
+            context.set_code(
+                grpc.StatusCode.INTERNAL
+            )
+            context.set_details(
+                "Failed to reserve inventory"
+            )
+
+            return inventory_pb2.ReserveStockResponse()
 
         finally:
             db.close()

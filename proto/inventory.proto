@@ -3,16 +3,28 @@ syntax = "proto3";
 package inventory;
 
 service InventoryService {
-  rpc CheckStock(CheckStockRequest) returns (CheckStockResponse);
+rpc CheckStock(CheckStockRequest) returns (CheckStockResponse);
+rpc ReserveStock(ReserveStockRequest) returns (ReserveStockResponse);
 }
 
 message CheckStockRequest {
-  string product_id = 1;
-  int32 quantity = 2;
+string product_id = 1;
+int32 quantity = 2;
 }
 
 message CheckStockResponse {
-  string product_id = 1;
-  int32 available_quantity = 2;
-  bool available = 3;
+string product_id = 1;
+int32 available_quantity = 2;
+bool available = 3;
+}
+
+message ReserveStockRequest {
+string product_id = 1;
+int32 quantity = 2;
+}
+
+message ReserveStockResponse {
+string product_id = 1;
+int32 remaining_quantity = 2;
+bool reserved = 3;
 }
