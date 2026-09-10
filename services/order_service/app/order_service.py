@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from inventory_client import check_stock
 from models import Order
 
 
@@ -14,6 +15,14 @@ class OrderManager:
         product_id: str,
         quantity: int,
     ):
+        inventory = check_stock(
+            product_id=product_id,
+            quantity=quantity,
+        )
+
+        if not inventory["available"]:
+            return None
+
         try:
             order = Order(
                 order_id=str(uuid.uuid4()),

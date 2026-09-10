@@ -11,10 +11,12 @@ app = FastAPI(
     version="1.0.0",
 )
 
+
 class CreateOrderRequest(BaseModel):
     user_id: str = Field(min_length=1)
     product_id: str = Field(min_length=1)
     quantity: int = Field(gt=0)
+
 
 @app.get("/health")
 def health_check():
@@ -36,7 +38,29 @@ def create_order(request: CreateOrderRequest):
         quantity=request.quantity,
     )
 
-    response = stub.CreateOrder(grpc_request)
+    try:
+        response = stub.CreateOrder(grpc_request)
+
+    except grpc.RpcError as error:
+        if error.code() == grpc.StatusCode.FAILED_PRECONDITION:
+            raise HTTPException(
+                status_code=409,
+                detail="Insufficient inventory",
+            )
+
+        if error.code() == grpc.StatusCode.UNAVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Inventory service unavailable",
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Order service unavailable",
+        )
+
+    finally:
+        channel.close()
 
     return {
         "order_id": response.order_id,
@@ -64,10 +88,19 @@ def get_order(order_id: str):
                 detail="Order not found",
             )
 
+        if error.code() == grpc.StatusCode.UNAVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Order service unavailable",
+            )
+
         raise HTTPException(
             status_code=500,
-            detail="Order service unavailable",
+            detail="Failed to retrieve order",
         )
+
+    finally:
+        channel.close()
 
     return {
         "order_id": response.order_id,

@@ -25,10 +25,22 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
                 quantity=request.quantity,
             )
 
+            if order is None:
+                context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+                context.set_details("Insufficient inventory")
+
+                return order_pb2.CreateOrderResponse()
+
             return order_pb2.CreateOrderResponse(
                 order_id=order.order_id,
                 status=order.status,
             )
+
+        except grpc.RpcError:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("Inventory service unavailable")
+
+            return order_pb2.CreateOrderResponse()
 
         except SQLAlchemyError:
             context.set_code(grpc.StatusCode.INTERNAL)
