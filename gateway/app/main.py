@@ -1,6 +1,6 @@
 import grpc
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import order_pb2
 from . import order_pb2_grpc
@@ -11,12 +11,10 @@ app = FastAPI(
     version="1.0.0",
 )
 
-
 class CreateOrderRequest(BaseModel):
-    user_id: str
-    product_id: str
-    quantity: int
-
+    user_id: str = Field(min_length=1)
+    product_id: str = Field(min_length=1)
+    quantity: int = Field(gt=0)
 
 @app.get("/health")
 def health_check():
