@@ -1,6 +1,7 @@
 from concurrent import futures
 
 import grpc
+from sqlalchemy.exc import SQLAlchemyError
 
 import order_pb2
 import order_pb2_grpc
@@ -29,6 +30,12 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
                 status=order.status,
             )
 
+        except SQLAlchemyError:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to create order")
+
+            return order_pb2.CreateOrderResponse()
+
         finally:
             db.close()
 
@@ -54,6 +61,12 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
                 quantity=order.quantity,
                 status=order.status,
             )
+
+        except SQLAlchemyError:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve order")
+
+            return order_pb2.GetOrderResponse()
 
         finally:
             db.close()

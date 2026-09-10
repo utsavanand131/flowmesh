@@ -1,5 +1,6 @@
 import uuid
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from models import Order
@@ -13,23 +14,33 @@ class OrderManager:
         product_id: str,
         quantity: int,
     ):
-        order = Order(
-            order_id=str(uuid.uuid4()),
-            user_id=user_id,
-            product_id=product_id,
-            quantity=quantity,
-            status="PENDING",
-        )
+        try:
+            order = Order(
+                order_id=str(uuid.uuid4()),
+                user_id=user_id,
+                product_id=product_id,
+                quantity=quantity,
+                status="PENDING",
+            )
 
-        db.add(order)
-        db.commit()
-        db.refresh(order)
+            db.add(order)
+            db.commit()
+            db.refresh(order)
 
-        return order
+            return order
+
+        except SQLAlchemyError:
+            db.rollback()
+            raise
 
     def get_order(
         self,
         db: Session,
         order_id: str,
     ):
-        return db.get(Order, order_id)
+        try:
+            return db.get(Order, order_id)
+
+        except SQLAlchemyError:
+            db.rollback()
+            raise
