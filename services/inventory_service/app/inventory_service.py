@@ -1,13 +1,22 @@
-class InventoryManager:
-    def __init__(self):
-        self.inventory = {
-            "product_456": 10,
-            "product_789": 5,
-            "product_999": 0,
-        }
+from sqlalchemy.orm import Session
 
-    def check_stock(self, product_id: str, quantity: int):
-        available_quantity = self.inventory.get(product_id, 0)
+from models import Inventory
+
+
+class InventoryManager:
+    def check_stock(
+        self,
+        db: Session,
+        product_id: str,
+        quantity: int,
+    ):
+        inventory = db.get(Inventory, product_id)
+
+        available_quantity = (
+            inventory.quantity
+            if inventory is not None
+            else 0
+        )
 
         return {
             "product_id": product_id,

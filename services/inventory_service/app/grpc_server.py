@@ -1,10 +1,12 @@
 from concurrent import futures
 
 import grpc
+from sqlalchemy.exc import SQLAlchemyError
 
 import inventory_pb2
 import inventory_pb2_grpc
 
+from database import SessionLocal
 from inventory_service import InventoryManager
 
 
@@ -13,16 +15,29 @@ inventory_manager = InventoryManager()
 
 class InventoryService(inventory_pb2_grpc.InventoryServiceServicer):
     def CheckStock(self, request, context):
-        result = inventory_manager.check_stock(
-            product_id=request.product_id,
-            quantity=request.quantity,
-        )
+        db = SessionLocal()
 
-        return inventory_pb2.CheckStockResponse(
-            product_id=result["product_id"],
-            available_quantity=result["available_quantity"],
-            available=result["available"],
-        )
+        try:
+            result = inventory_manager.check_stock(
+                db=db,
+                product_id=request.product_id,
+                quantity=request.quantity,
+            )
+
+            return inventory_pb2.CheckStockResponse(
+                product_id=result["product_id"],
+                available_quantity=result["available_quantity"],
+                available=result["available"],
+            )
+
+        except SQLAlchemyError:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to check inventory")
+
+            return inventory_pb2.CheckStockResponse()
+
+        finally:
+            db.close()
 
 
 def serve():
