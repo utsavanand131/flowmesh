@@ -3,7 +3,9 @@ import uuid
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from inventory_client import check_stock, reserve_stock
+from inventory_client import check_stock
+from inventory_client import release_stock
+from inventory_client import reserve_stock
 from models import Order
 
 
@@ -23,15 +25,12 @@ class OrderManager:
         if not inventory["available"]:
             return None
 
+        reservation = reserve_stock(
+            product_id=product_id,
+            quantity=quantity,
+        )
+
         try:
-            reservation = reserve_stock(
-                product_id=product_id,
-                quantity=quantity,
-            )
-
-            if not reservation["reserved"]:
-                return None
-
             order = Order(
                 order_id=str(uuid.uuid4()),
                 user_id=user_id,
@@ -48,4 +47,20 @@ class OrderManager:
 
         except SQLAlchemyError:
             db.rollback()
+
+            try:
+                release_stock(
+                    product_id=product_id,
+                    quantity=quantity,
+                )
+
+            except Exception:
+                print(
+                    "CRITICAL: Failed to release inventory "
+                    f"for product {product_id}, "
+                    f"quantity {quantity}"
+                )
+
             raise
+
+               
