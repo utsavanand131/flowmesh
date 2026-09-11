@@ -1,3 +1,4 @@
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from models import Inventory
@@ -30,26 +31,45 @@ class InventoryManager:
         product_id: str,
         quantity: int,
     ):
-        inventory = db.get(Inventory, product_id)
+        statement = (
+            update(Inventory)
+            .where(
+                Inventory.product_id == product_id,
+                Inventory.quantity >= quantity,
+            )
+            .values(
+                quantity=Inventory.quantity - quantity,
+            )
+        )
 
-        if inventory is None:
+        result = db.execute(statement)
+
+        if result.rowcount == 0:
+            db.rollback()
+
+            inventory = db.get(
+                Inventory,
+                product_id,
+            )
+
+            remaining_quantity = (
+                inventory.quantity
+                if inventory is not None
+                else 0
+            )
+
             return {
                 "product_id": product_id,
-                "remaining_quantity": 0,
+                "remaining_quantity": remaining_quantity,
                 "reserved": False,
             }
-
-        if inventory.quantity < quantity:
-            return {
-                "product_id": product_id,
-                "remaining_quantity": inventory.quantity,
-                "reserved": False,
-            }
-
-        inventory.quantity -= quantity
 
         db.commit()
-        db.refresh(inventory)
+
+        inventory = db.get(
+            Inventory,
+            product_id,
+        )
 
         return {
             "product_id": product_id,
