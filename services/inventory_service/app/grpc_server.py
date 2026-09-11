@@ -94,6 +94,49 @@ class InventoryService(
         finally:
             db.close()
 
+    def ReleaseStock(self, request, context):
+        db = SessionLocal()
+
+        try:
+            result = inventory_manager.release_stock(
+                db=db,
+                product_id=request.product_id,
+                quantity=request.quantity,
+            )
+
+            if not result["released"]:
+                context.set_code(
+                    grpc.StatusCode.NOT_FOUND
+                )
+                context.set_details(
+                    "Inventory product not found"
+                )
+
+                return inventory_pb2.ReleaseStockResponse()
+
+            return inventory_pb2.ReleaseStockResponse(
+                product_id=result["product_id"],
+                remaining_quantity=result[
+                    "remaining_quantity"
+                ],
+                released=True,
+            )
+
+        except SQLAlchemyError:
+            db.rollback()
+
+            context.set_code(
+                grpc.StatusCode.INTERNAL
+            )
+            context.set_details(
+                "Failed to release inventory"
+            )
+
+            return inventory_pb2.ReleaseStockResponse()
+
+        finally:
+            db.close()
+
 
 def serve():
     server = grpc.server(

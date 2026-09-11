@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0finventory.proto\x12\tinventory\"9\n\x11\x43heckStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"W\n\x12\x43heckStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12\x61vailable_quantity\x18\x02 \x01(\x05\x12\x11\n\tavailable\x18\x03 \x01(\x08\";\n\x13ReserveStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"X\n\x14ReserveStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12remaining_quantity\x18\x02 \x01(\x05\x12\x10\n\x08reserved\x18\x03 \x01(\x08\x32\xae\x01\n\x10InventoryService\x12I\n\nCheckStock\x12\x1c.inventory.CheckStockRequest\x1a\x1d.inventory.CheckStockResponse\x12O\n\x0cReserveStock\x12\x1e.inventory.ReserveStockRequest\x1a\x1f.inventory.ReserveStockResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0finventory.proto\x12\tinventory\"9\n\x11\x43heckStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"W\n\x12\x43heckStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12\x61vailable_quantity\x18\x02 \x01(\x05\x12\x11\n\tavailable\x18\x03 \x01(\x08\";\n\x13ReserveStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"X\n\x14ReserveStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12remaining_quantity\x18\x02 \x01(\x05\x12\x10\n\x08reserved\x18\x03 \x01(\x08\";\n\x13ReleaseStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"X\n\x14ReleaseStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12remaining_quantity\x18\x02 \x01(\x05\x12\x10\n\x08released\x18\x03 \x01(\x08\x32\xff\x01\n\x10InventoryService\x12I\n\nCheckStock\x12\x1c.inventory.CheckStockRequest\x1a\x1d.inventory.CheckStockResponse\x12O\n\x0cReserveStock\x12\x1e.inventory.ReserveStockRequest\x1a\x1f.inventory.ReserveStockResponse\x12O\n\x0cReleaseStock\x12\x1e.inventory.ReleaseStockRequest\x1a\x1f.inventory.ReleaseStockResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -39,6 +39,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_RESERVESTOCKREQUEST']._serialized_end=237
   _globals['_RESERVESTOCKRESPONSE']._serialized_start=239
   _globals['_RESERVESTOCKRESPONSE']._serialized_end=327
-  _globals['_INVENTORYSERVICE']._serialized_start=330
-  _globals['_INVENTORYSERVICE']._serialized_end=504
+  _globals['_RELEASESTOCKREQUEST']._serialized_start=329
+  _globals['_RELEASESTOCKREQUEST']._serialized_end=388
+  _globals['_RELEASESTOCKRESPONSE']._serialized_start=390
+  _globals['_RELEASESTOCKRESPONSE']._serialized_end=478
+  _globals['_INVENTORYSERVICE']._serialized_start=481
+  _globals['_INVENTORYSERVICE']._serialized_end=736
 # @@protoc_insertion_point(module_scope)

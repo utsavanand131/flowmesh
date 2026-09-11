@@ -54,3 +54,29 @@ def reserve_stock(
 
     finally:
         channel.close()
+
+
+def release_stock(
+    product_id: str,
+    quantity: int,
+):
+    channel = grpc.insecure_channel("localhost:50052")
+
+    stub = inventory_pb2_grpc.InventoryServiceStub(channel)
+
+    request = inventory_pb2.ReleaseStockRequest(
+        product_id=product_id,
+        quantity=quantity,
+    )
+
+    try:
+        response = stub.ReleaseStock(request)
+
+        return {
+            "product_id": response.product_id,
+            "remaining_quantity": response.remaining_quantity,
+            "released": response.released,
+        }
+
+    finally:
+        channel.close()
