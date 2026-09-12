@@ -3,8 +3,11 @@ syntax = "proto3";
 package order;
 
 service OrderService {
-  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
-  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+  rpc CreateOrder(CreateOrderRequest)
+      returns (CreateOrderResponse);
+
+  rpc GetOrder(GetOrderRequest)
+      returns (GetOrderResponse);
 }
 
 message CreateOrderRequest {
@@ -16,6 +19,8 @@ message CreateOrderRequest {
 message CreateOrderResponse {
   string order_id = 1;
   string status = 2;
+  string delivery_id = 3;
+  string delivery_status = 4;
 }
 
 message GetOrderRequest {

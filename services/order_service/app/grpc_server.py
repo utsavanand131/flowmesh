@@ -13,38 +13,64 @@ from order_service import OrderManager
 order_manager = OrderManager()
 
 
-class OrderService(order_pb2_grpc.OrderServiceServicer):
+class OrderService(
+    order_pb2_grpc.OrderServiceServicer
+):
     def CreateOrder(self, request, context):
         db = SessionLocal()
 
         try:
-            order = order_manager.create_order(
+            result = order_manager.create_order(
                 db=db,
                 user_id=request.user_id,
                 product_id=request.product_id,
                 quantity=request.quantity,
             )
 
-            if order is None:
-                context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
-                context.set_details("Insufficient inventory")
+            if result is None:
+                context.set_code(
+                    grpc.StatusCode.FAILED_PRECONDITION
+                )
+                context.set_details(
+                    "Insufficient inventory"
+                )
 
                 return order_pb2.CreateOrderResponse()
+
+            order = result["order"]
+            delivery = result["delivery"]
 
             return order_pb2.CreateOrderResponse(
                 order_id=order.order_id,
                 status=order.status,
+                delivery_id=delivery["delivery_id"],
+                delivery_status=delivery["status"],
             )
 
-        except grpc.RpcError:
-            context.set_code(grpc.StatusCode.UNAVAILABLE)
-            context.set_details("Inventory service unavailable")
+        except SQLAlchemyError:
+            db.rollback()
+
+            context.set_code(
+                grpc.StatusCode.INTERNAL
+            )
+            context.set_details(
+                "Failed to create order"
+            )
 
             return order_pb2.CreateOrderResponse()
 
-        except SQLAlchemyError:
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details("Failed to create order")
+        except Exception as error:
+            print(
+                "Order creation error:",
+                error,
+            )
+
+            context.set_code(
+                grpc.StatusCode.INTERNAL
+            )
+            context.set_details(
+                str(error)
+            )
 
             return order_pb2.CreateOrderResponse()
 
@@ -61,8 +87,12 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
             )
 
             if order is None:
-                context.set_code(grpc.StatusCode.NOT_FOUND)
-                context.set_details("Order not found")
+                context.set_code(
+                    grpc.StatusCode.NOT_FOUND
+                )
+                context.set_details(
+                    "Order not found"
+                )
 
                 return order_pb2.GetOrderResponse()
 
@@ -75,8 +105,12 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
             )
 
         except SQLAlchemyError:
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details("Failed to retrieve order")
+            context.set_code(
+                grpc.StatusCode.INTERNAL
+            )
+            context.set_details(
+                "Failed to retrieve order"
+            )
 
             return order_pb2.GetOrderResponse()
 
@@ -98,7 +132,10 @@ def serve():
 
     server.start()
 
-    print("FlowMesh Order Service gRPC server running on port 50051")
+    print(
+        "FlowMesh Order Service gRPC server "
+        "running on port 50051"
+    )
 
     server.wait_for_termination()
 

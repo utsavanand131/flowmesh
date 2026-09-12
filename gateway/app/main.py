@@ -28,9 +28,13 @@ def health_check():
 
 @app.post("/orders")
 def create_order(request: CreateOrderRequest):
-    channel = grpc.insecure_channel("localhost:50051")
+    channel = grpc.insecure_channel(
+        "localhost:50051"
+    )
 
-    stub = order_pb2_grpc.OrderServiceStub(channel)
+    stub = order_pb2_grpc.OrderServiceStub(
+        channel
+    )
 
     grpc_request = order_pb2.CreateOrderRequest(
         user_id=request.user_id,
@@ -39,9 +43,17 @@ def create_order(request: CreateOrderRequest):
     )
 
     try:
-        response = stub.CreateOrder(grpc_request)
+        response = stub.CreateOrder(
+            grpc_request
+        )
 
     except grpc.RpcError as error:
+        print(
+            "Order Service gRPC error:",
+            error.code(),
+            error.details(),
+        )
+
         if error.code() == grpc.StatusCode.FAILED_PRECONDITION:
             raise HTTPException(
                 status_code=409,
@@ -51,7 +63,7 @@ def create_order(request: CreateOrderRequest):
         if error.code() == grpc.StatusCode.UNAVAILABLE:
             raise HTTPException(
                 status_code=503,
-                detail="Inventory service unavailable",
+                detail="Order service unavailable",
             )
 
         raise HTTPException(
@@ -65,23 +77,39 @@ def create_order(request: CreateOrderRequest):
     return {
         "order_id": response.order_id,
         "status": response.status,
+        "delivery": {
+            "delivery_id": response.delivery_id,
+            "status": response.delivery_status,
+        },
     }
 
 
 @app.get("/orders/{order_id}")
 def get_order(order_id: str):
-    channel = grpc.insecure_channel("localhost:50051")
+    channel = grpc.insecure_channel(
+        "localhost:50051"
+    )
 
-    stub = order_pb2_grpc.OrderServiceStub(channel)
+    stub = order_pb2_grpc.OrderServiceStub(
+        channel
+    )
 
     grpc_request = order_pb2.GetOrderRequest(
         order_id=order_id,
     )
 
     try:
-        response = stub.GetOrder(grpc_request)
+        response = stub.GetOrder(
+            grpc_request
+        )
 
     except grpc.RpcError as error:
+        print(
+            "Order Service gRPC error:",
+            error.code(),
+            error.details(),
+        )
+
         if error.code() == grpc.StatusCode.NOT_FOUND:
             raise HTTPException(
                 status_code=404,
