@@ -38,13 +38,10 @@ class OrderService(
                 return order_pb2.CreateOrderResponse()
 
             order = result["order"]
-            delivery = result["delivery"]
 
             return order_pb2.CreateOrderResponse(
                 order_id=order.order_id,
                 status=order.status,
-                delivery_id=delivery["delivery_id"],
-                delivery_status=delivery["status"],
             )
 
         except SQLAlchemyError:
@@ -69,7 +66,7 @@ class OrderService(
                 grpc.StatusCode.INTERNAL
             )
             context.set_details(
-                str(error)
+                "Failed to create order"
             )
 
             return order_pb2.CreateOrderResponse()
@@ -120,7 +117,9 @@ class OrderService(
 
 def serve():
     server = grpc.server(
-        futures.ThreadPoolExecutor(max_workers=10)
+        futures.ThreadPoolExecutor(
+            max_workers=10
+        )
     )
 
     order_pb2_grpc.add_OrderServiceServicer_to_server(
@@ -128,7 +127,9 @@ def serve():
         server,
     )
 
-    server.add_insecure_port("[::]:50051")
+    server.add_insecure_port(
+        "[::]:50051"
+    )
 
     server.start()
 

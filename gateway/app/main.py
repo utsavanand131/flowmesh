@@ -1,4 +1,5 @@
 import grpc
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
@@ -78,8 +79,7 @@ def create_order(request: CreateOrderRequest):
         "order_id": response.order_id,
         "status": response.status,
         "delivery": {
-            "delivery_id": response.delivery_id,
-            "status": response.delivery_status,
+            "status": "PROCESSING",
         },
     }
 

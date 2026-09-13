@@ -5,6 +5,8 @@ import redis
 
 from lib.redis import redis_client
 from lib.events import ORDER_EVENTS_STREAM
+from workers.delivery_client import create_delivery
+
 
 CONSUMER_GROUP = "flowmesh-workers"
 CONSUMER_NAME = "order-event-worker-1"
@@ -44,6 +46,17 @@ def process_event(message_id, fields):
     print("Event type:", event_type)
     print("Order ID:", order_id)
     print("Data:", data)
+
+    if event_type == "order.created":
+        delivery = create_delivery(
+            order_id=order_id,
+        )
+
+        print(
+            "Delivery created:",
+            delivery,
+        )
+
     print()
 
 

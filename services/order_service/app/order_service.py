@@ -3,11 +3,12 @@ import uuid
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from delivery_client import create_delivery
 from inventory_client import check_stock
 from inventory_client import release_stock
 from inventory_client import reserve_stock
 from models import Order
+
+from lib.events import publish_order_event
 
 
 class OrderManager:
@@ -66,13 +67,19 @@ class OrderManager:
             raise
 
         try:
-            delivery = create_delivery(
+            publish_order_event(
+                event_type="order.created",
                 order_id=order.order_id,
+                data={
+                    "user_id": order.user_id,
+                    "product_id": order.product_id,
+                    "quantity": order.quantity,
+                },
             )
 
         except Exception:
             print(
-                "Delivery creation failed. "
+                "Order event publishing failed. "
                 "Compensating order and inventory."
             )
 
@@ -85,7 +92,7 @@ class OrderManager:
 
                 print(
                     "CRITICAL: Failed to remove order "
-                    f"{order.order_id} after delivery failure"
+                    f"{order.order_id} after event publishing failure"
                 )
 
             try:
@@ -105,5 +112,14 @@ class OrderManager:
 
         return {
             "order": order,
-            "delivery": delivery,
         }
+
+    def get_order(
+        self,
+        db: Session,
+        order_id: str,
+    ):
+        return db.get(
+            Order,
+            order_id,
+        )
