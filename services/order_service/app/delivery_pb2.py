@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0e\x64\x65livery.proto\x12\x08\x64\x65livery\")\n\x15\x43reateDeliveryRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\"O\n\x16\x43reateDeliveryResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\")\n\x12GetDeliveryRequest\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\"L\n\x13GetDeliveryResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t2\xb2\x01\n\x0f\x44\x65liveryService\x12S\n\x0e\x43reateDelivery\x12\x1f.delivery.CreateDeliveryRequest\x1a .delivery.CreateDeliveryResponse\x12J\n\x0bGetDelivery\x12\x1c.delivery.GetDeliveryRequest\x1a\x1d.delivery.GetDeliveryResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0e\x64\x65livery.proto\x12\x08\x64\x65livery\")\n\x15\x43reateDeliveryRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\"O\n\x16\x43reateDeliveryResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\")\n\x12GetDeliveryRequest\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\"L\n\x13GetDeliveryResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\"-\n\x19GetDeliveryByOrderRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\"S\n\x1aGetDeliveryByOrderResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t2\x93\x02\n\x0f\x44\x65liveryService\x12S\n\x0e\x43reateDelivery\x12\x1f.delivery.CreateDeliveryRequest\x1a .delivery.CreateDeliveryResponse\x12J\n\x0bGetDelivery\x12\x1c.delivery.GetDeliveryRequest\x1a\x1d.delivery.GetDeliveryResponse\x12_\n\x12GetDeliveryByOrder\x12#.delivery.GetDeliveryByOrderRequest\x1a$.delivery.GetDeliveryByOrderResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -39,6 +39,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_GETDELIVERYREQUEST']._serialized_end=193
   _globals['_GETDELIVERYRESPONSE']._serialized_start=195
   _globals['_GETDELIVERYRESPONSE']._serialized_end=271
-  _globals['_DELIVERYSERVICE']._serialized_start=274
-  _globals['_DELIVERYSERVICE']._serialized_end=452
+  _globals['_GETDELIVERYBYORDERREQUEST']._serialized_start=273
+  _globals['_GETDELIVERYBYORDERREQUEST']._serialized_end=318
+  _globals['_GETDELIVERYBYORDERRESPONSE']._serialized_start=320
+  _globals['_GETDELIVERYBYORDERRESPONSE']._serialized_end=403
+  _globals['_DELIVERYSERVICE']._serialized_start=406
+  _globals['_DELIVERYSERVICE']._serialized_end=681
 # @@protoc_insertion_point(module_scope)

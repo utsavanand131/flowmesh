@@ -108,6 +108,8 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
             return response
 
         except SQLAlchemyError:
+            db.rollback()
+
             context.set_code(
                 grpc.StatusCode.INTERNAL
             )

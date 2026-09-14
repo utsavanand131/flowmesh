@@ -44,6 +44,11 @@ class DeliveryServiceStub:
                 request_serializer=delivery__pb2.GetDeliveryRequest.SerializeToString,
                 response_deserializer=delivery__pb2.GetDeliveryResponse.FromString,
                 _registered_method=True)
+        self.GetDeliveryByOrder = channel.unary_unary(
+                '/delivery.DeliveryService/GetDeliveryByOrder',
+                request_serializer=delivery__pb2.GetDeliveryByOrderRequest.SerializeToString,
+                response_deserializer=delivery__pb2.GetDeliveryByOrderResponse.FromString,
+                _registered_method=True)
 
 
 class DeliveryServiceServicer:
@@ -61,6 +66,12 @@ class DeliveryServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetDeliveryByOrder(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_DeliveryServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -73,6 +84,11 @@ def add_DeliveryServiceServicer_to_server(servicer, server):
                     servicer.GetDelivery,
                     request_deserializer=delivery__pb2.GetDeliveryRequest.FromString,
                     response_serializer=delivery__pb2.GetDeliveryResponse.SerializeToString,
+            ),
+            'GetDeliveryByOrder': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDeliveryByOrder,
+                    request_deserializer=delivery__pb2.GetDeliveryByOrderRequest.FromString,
+                    response_serializer=delivery__pb2.GetDeliveryByOrderResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -129,6 +145,33 @@ class DeliveryService:
             '/delivery.DeliveryService/GetDelivery',
             delivery__pb2.GetDeliveryRequest.SerializeToString,
             delivery__pb2.GetDeliveryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetDeliveryByOrder(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/delivery.DeliveryService/GetDeliveryByOrder',
+            delivery__pb2.GetDeliveryByOrderRequest.SerializeToString,
+            delivery__pb2.GetDeliveryByOrderResponse.FromString,
             options,
             channel_credentials,
             insecure,
