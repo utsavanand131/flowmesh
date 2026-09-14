@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from delivery_client import get_delivery_by_order
 from inventory_client import check_stock
 from inventory_client import release_stock
 from inventory_client import reserve_stock
@@ -119,7 +120,19 @@ class OrderManager:
         db: Session,
         order_id: str,
     ):
-        return db.get(
+        order = db.get(
             Order,
             order_id,
         )
+
+        if order is None:
+            return None
+
+        delivery = get_delivery_by_order(
+            order_id=order.order_id,
+        )
+
+        return {
+            "order": order,
+            "delivery": delivery,
+        }

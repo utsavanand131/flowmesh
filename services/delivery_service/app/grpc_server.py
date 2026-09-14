@@ -94,10 +94,64 @@ class DeliveryService(
         finally:
             db.close()
 
+    def GetDeliveryByOrder(
+        self,
+        request,
+        context,
+    ):
+        db = SessionLocal()
+
+        try:
+            delivery = (
+                delivery_manager.get_delivery_by_order(
+                    db=db,
+                    order_id=request.order_id,
+                )
+            )
+
+            if delivery is None:
+                context.set_code(
+                    grpc.StatusCode.NOT_FOUND
+                )
+                context.set_details(
+                    "Delivery not found for order"
+                )
+
+                return (
+                    delivery_pb2.GetDeliveryByOrderResponse()
+                )
+
+            return (
+                delivery_pb2.GetDeliveryByOrderResponse(
+                    delivery_id=delivery.delivery_id,
+                    order_id=delivery.order_id,
+                    status=delivery.status,
+                )
+            )
+
+        except SQLAlchemyError:
+            db.rollback()
+
+            context.set_code(
+                grpc.StatusCode.INTERNAL
+            )
+            context.set_details(
+                "Failed to get delivery for order"
+            )
+
+            return (
+                delivery_pb2.GetDeliveryByOrderResponse()
+            )
+
+        finally:
+            db.close()
+
 
 def serve():
     server = grpc.server(
-        futures.ThreadPoolExecutor(max_workers=10)
+        futures.ThreadPoolExecutor(
+            max_workers=10
+        )
     )
 
     delivery_pb2_grpc.add_DeliveryServiceServicer_to_server(
@@ -105,7 +159,9 @@ def serve():
         server,
     )
 
-    server.add_insecure_port("[::]:50053")
+    server.add_insecure_port(
+        "[::]:50053"
+    )
 
     server.start()
 

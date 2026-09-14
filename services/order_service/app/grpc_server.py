@@ -13,9 +13,7 @@ from order_service import OrderManager
 order_manager = OrderManager()
 
 
-class OrderService(
-    order_pb2_grpc.OrderServiceServicer
-):
+class OrderService(order_pb2_grpc.OrderServiceServicer):
     def CreateOrder(self, request, context):
         db = SessionLocal()
 
@@ -34,7 +32,6 @@ class OrderService(
                 context.set_details(
                     "Insufficient inventory"
                 )
-
                 return order_pb2.CreateOrderResponse()
 
             order = result["order"]
@@ -78,12 +75,12 @@ class OrderService(
         db = SessionLocal()
 
         try:
-            order = order_manager.get_order(
+            result = order_manager.get_order(
                 db=db,
                 order_id=request.order_id,
             )
 
-            if order is None:
+            if result is None:
                 context.set_code(
                     grpc.StatusCode.NOT_FOUND
                 )
@@ -93,7 +90,10 @@ class OrderService(
 
                 return order_pb2.GetOrderResponse()
 
-            return order_pb2.GetOrderResponse(
+            order = result["order"]
+            delivery = result["delivery"]
+
+            response = order_pb2.GetOrderResponse(
                 order_id=order.order_id,
                 user_id=order.user_id,
                 product_id=order.product_id,
@@ -101,7 +101,31 @@ class OrderService(
                 status=order.status,
             )
 
+            if delivery is not None:
+                response.delivery_id = delivery["delivery_id"]
+                response.delivery_status = delivery["status"]
+
+            return response
+
         except SQLAlchemyError:
+            context.set_code(
+                grpc.StatusCode.INTERNAL
+            )
+            context.set_details(
+                "Failed to retrieve order"
+            )
+
+            return order_pb2.GetOrderResponse()
+
+        except grpc.RpcError:
+            raise
+
+        except Exception as error:
+            print(
+                "Get order error:",
+                error,
+            )
+
             context.set_code(
                 grpc.StatusCode.INTERNAL
             )

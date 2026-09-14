@@ -8,6 +8,9 @@ service DeliveryService {
 
   rpc GetDelivery(GetDeliveryRequest)
       returns (GetDeliveryResponse);
+
+  rpc GetDeliveryByOrder(GetDeliveryByOrderRequest)
+      returns (GetDeliveryByOrderResponse);
 }
 
 message CreateDeliveryRequest {
@@ -25,6 +28,16 @@ message GetDeliveryRequest {
 }
 
 message GetDeliveryResponse {
+  string delivery_id = 1;
+  string order_id = 2;
+  string status = 3;
+}
+
+message GetDeliveryByOrderRequest {
+  string order_id = 1;
+}
+
+message GetDeliveryByOrderResponse {
   string delivery_id = 1;
   string order_id = 2;
   string status = 3;

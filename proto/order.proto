@@ -33,4 +33,6 @@ message GetOrderResponse {
   string product_id = 3;
   int32 quantity = 4;
   string status = 5;
+  string delivery_id = 6;
+  string delivery_status = 7;
 }

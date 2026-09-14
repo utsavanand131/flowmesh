@@ -39,3 +39,16 @@ class DeliveryManager:
             Delivery,
             delivery_id,
         )
+
+    def get_delivery_by_order(
+        self,
+        db: Session,
+        order_id: str,
+    ):
+        return (
+            db.query(Delivery)
+            .filter(
+                Delivery.order_id == order_id
+            )
+            .first()
+        )

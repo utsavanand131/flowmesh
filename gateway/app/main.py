@@ -28,7 +28,9 @@ def health_check():
 
 
 @app.post("/orders")
-def create_order(request: CreateOrderRequest):
+def create_order(
+    request: CreateOrderRequest,
+):
     channel = grpc.insecure_channel(
         "localhost:50051"
     )
@@ -85,7 +87,9 @@ def create_order(request: CreateOrderRequest):
 
 
 @app.get("/orders/{order_id}")
-def get_order(order_id: str):
+def get_order(
+    order_id: str,
+):
     channel = grpc.insecure_channel(
         "localhost:50051"
     )
@@ -130,10 +134,19 @@ def get_order(order_id: str):
     finally:
         channel.close()
 
+    delivery = None
+
+    if response.delivery_id:
+        delivery = {
+            "delivery_id": response.delivery_id,
+            "status": response.delivery_status,
+        }
+
     return {
         "order_id": response.order_id,
         "user_id": response.user_id,
         "product_id": response.product_id,
         "quantity": response.quantity,
         "status": response.status,
+        "delivery": delivery,
     }
