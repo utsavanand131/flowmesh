@@ -52,10 +52,16 @@ def process_event(message_id, fields):
             order_id=order_id,
         )
 
-        print(
-            "Delivery created:",
-            delivery,
-        )
+        if delivery.get("already_exists"):
+            print(
+                "Delivery already exists. "
+                "Treating event as already processed."
+            )
+        else:
+            print(
+                "Delivery created:",
+                delivery,
+            )
 
     print()
 

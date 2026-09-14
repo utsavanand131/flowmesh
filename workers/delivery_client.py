@@ -30,5 +30,14 @@ def create_delivery(order_id: str):
             "status": response.status,
         }
 
+    except grpc.RpcError as error:
+        if error.code() == grpc.StatusCode.ALREADY_EXISTS:
+            return {
+                "already_exists": True,
+                "status": "ALREADY_EXISTS",
+            }
+
+        raise
+
     finally:
         channel.close()
