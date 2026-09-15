@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from lib.events import publish_delivery_event
 from models import Delivery
 
 
@@ -23,12 +24,20 @@ class DeliveryManager:
             db.commit()
             db.refresh(delivery)
 
-            return delivery
-
         except IntegrityError:
             db.rollback()
-
             return None
+
+        publish_delivery_event(
+            event_type="delivery.assigned",
+            order_id=delivery.order_id,
+            data={
+                "delivery_id": delivery.delivery_id,
+                "status": delivery.status,
+            },
+        )
+
+        return delivery
 
     def get_delivery(
         self,
