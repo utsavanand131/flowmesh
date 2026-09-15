@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Integer, String
+from sqlalchemy import Boolean, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
@@ -34,4 +34,35 @@ class Order(Base):
         String(50),
         nullable=False,
         default="PENDING",
+    )
+
+
+class OutboxEvent(Base):
+    __tablename__ = "outbox_events"
+
+    event_id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+
+    event_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    aggregate_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+    )
+
+    payload: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    published: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
     )

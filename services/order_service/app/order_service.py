@@ -1,3 +1,4 @@
+import json
 import uuid
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -7,9 +8,7 @@ from delivery_client import get_delivery_by_order
 from inventory_client import check_stock
 from inventory_client import release_stock
 from inventory_client import reserve_stock
-from models import Order
-
-from lib.events import publish_order_event
+from models import Order, OutboxEvent
 
 
 class OrderManager:
@@ -46,55 +45,29 @@ class OrderManager:
             )
 
             db.add(order)
+
+            event = OutboxEvent(
+                event_id=str(uuid.uuid4()),
+                event_type="order.created",
+                aggregate_id=order.order_id,
+                payload=json.dumps(
+                    {
+                        "user_id": user_id,
+                        "product_id": product_id,
+                        "quantity": quantity,
+                    }
+                ),
+                published=False,
+            )
+
+            db.add(event)
+
             db.commit()
+
             db.refresh(order)
 
         except SQLAlchemyError:
             db.rollback()
-
-            try:
-                release_stock(
-                    product_id=product_id,
-                    quantity=quantity,
-                )
-
-            except Exception:
-                print(
-                    "CRITICAL: Failed to release inventory "
-                    f"for product {product_id}, "
-                    f"quantity {quantity}"
-                )
-
-            raise
-
-        try:
-            publish_order_event(
-                event_type="order.created",
-                order_id=order.order_id,
-                data={
-                    "user_id": order.user_id,
-                    "product_id": order.product_id,
-                    "quantity": order.quantity,
-                },
-            )
-
-        except Exception:
-            print(
-                "Order event publishing failed. "
-                "Compensating order and inventory."
-            )
-
-            try:
-                db.delete(order)
-                db.commit()
-
-            except SQLAlchemyError:
-                db.rollback()
-
-                print(
-                    "CRITICAL: Failed to remove order "
-                    f"{order.order_id} after event publishing failure"
-                )
 
             try:
                 release_stock(
