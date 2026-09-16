@@ -1,10 +1,10 @@
+import json
 import uuid
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from lib.events import publish_delivery_event
-from models import Delivery
+from models import Delivery, OutboxEvent
 
 
 class DeliveryManager:
@@ -21,21 +21,32 @@ class DeliveryManager:
 
         try:
             db.add(delivery)
+
+            db.flush()
+
+            event = OutboxEvent(
+                event_id=str(uuid.uuid4()),
+                event_type="delivery.assigned",
+                aggregate_id=delivery.order_id,
+                payload=json.dumps(
+                    {
+                        "delivery_id": delivery.delivery_id,
+                        "status": delivery.status,
+                    }
+                ),
+                published=False,
+            )
+
+            db.add(event)
+
             db.commit()
+
             db.refresh(delivery)
 
         except IntegrityError:
             db.rollback()
-            return None
 
-        publish_delivery_event(
-            event_type="delivery.assigned",
-            order_id=delivery.order_id,
-            data={
-                "delivery_id": delivery.delivery_id,
-                "status": delivery.status,
-            },
-        )
+            return None
 
         return delivery
 
