@@ -9,6 +9,7 @@ from services.order_service.app.models import OutboxEvent
 
 
 POLL_INTERVAL = 2
+BATCH_SIZE = 10
 
 
 def publish_pending_events():
@@ -23,7 +24,10 @@ def publish_pending_events():
             .order_by(
                 OutboxEvent.event_id
             )
-            .limit(10)
+            .limit(BATCH_SIZE)
+            .with_for_update(
+                skip_locked=True
+            )
             .all()
         )
 
