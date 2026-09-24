@@ -146,6 +146,79 @@ class DeliveryService(
         finally:
             db.close()
 
+    def UpdateDeliveryStatus(self, request, context):
+        db = SessionLocal()
+
+        try:
+            delivery, error = (
+                delivery_manager.update_delivery_status(
+                    db=db,
+                    delivery_id=request.delivery_id,
+                    new_status=request.status,
+                )
+            )
+
+            if error == "INVALID_STATUS":
+                context.set_code(
+                    grpc.StatusCode.INVALID_ARGUMENT
+                )
+                context.set_details(
+                    "Invalid delivery status"
+                )
+
+                return (
+                    delivery_pb2.UpdateDeliveryStatusResponse()
+                )
+
+            if error == "NOT_FOUND":
+                context.set_code(
+                    grpc.StatusCode.NOT_FOUND
+                )
+                context.set_details(
+                    "Delivery not found"
+                )
+
+                return (
+                    delivery_pb2.UpdateDeliveryStatusResponse()
+                )
+
+            if error == "INVALID_TRANSITION":
+                context.set_code(
+                    grpc.StatusCode.FAILED_PRECONDITION
+                )
+                context.set_details(
+                    "Invalid delivery status transition"
+                )
+
+                return (
+                    delivery_pb2.UpdateDeliveryStatusResponse()
+                )
+
+            return (
+                delivery_pb2.UpdateDeliveryStatusResponse(
+                    delivery_id=delivery.delivery_id,
+                    order_id=delivery.order_id,
+                    status=delivery.status,
+                )
+            )
+
+        except SQLAlchemyError:
+            db.rollback()
+
+            context.set_code(
+                grpc.StatusCode.INTERNAL
+            )
+            context.set_details(
+                "Failed to update delivery status"
+            )
+
+            return (
+                delivery_pb2.UpdateDeliveryStatusResponse()
+            )
+
+        finally:
+            db.close()
+
 
 def serve():
     server = grpc.server(

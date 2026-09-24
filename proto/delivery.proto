@@ -11,6 +11,9 @@ service DeliveryService {
 
   rpc GetDeliveryByOrder(GetDeliveryByOrderRequest)
       returns (GetDeliveryByOrderResponse);
+
+  rpc UpdateDeliveryStatus(UpdateDeliveryStatusRequest)
+      returns (UpdateDeliveryStatusResponse);
 }
 
 message CreateDeliveryRequest {
@@ -38,6 +41,17 @@ message GetDeliveryByOrderRequest {
 }
 
 message GetDeliveryByOrderResponse {
+  string delivery_id = 1;
+  string order_id = 2;
+  string status = 3;
+}
+
+message UpdateDeliveryStatusRequest {
+  string delivery_id = 1;
+  string status = 2;
+}
+
+message UpdateDeliveryStatusResponse {
   string delivery_id = 1;
   string order_id = 2;
   string status = 3;

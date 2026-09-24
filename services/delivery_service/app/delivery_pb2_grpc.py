@@ -49,6 +49,11 @@ class DeliveryServiceStub:
                 request_serializer=delivery__pb2.GetDeliveryByOrderRequest.SerializeToString,
                 response_deserializer=delivery__pb2.GetDeliveryByOrderResponse.FromString,
                 _registered_method=True)
+        self.UpdateDeliveryStatus = channel.unary_unary(
+                '/delivery.DeliveryService/UpdateDeliveryStatus',
+                request_serializer=delivery__pb2.UpdateDeliveryStatusRequest.SerializeToString,
+                response_deserializer=delivery__pb2.UpdateDeliveryStatusResponse.FromString,
+                _registered_method=True)
 
 
 class DeliveryServiceServicer:
@@ -72,6 +77,12 @@ class DeliveryServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def UpdateDeliveryStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_DeliveryServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -89,6 +100,11 @@ def add_DeliveryServiceServicer_to_server(servicer, server):
                     servicer.GetDeliveryByOrder,
                     request_deserializer=delivery__pb2.GetDeliveryByOrderRequest.FromString,
                     response_serializer=delivery__pb2.GetDeliveryByOrderResponse.SerializeToString,
+            ),
+            'UpdateDeliveryStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateDeliveryStatus,
+                    request_deserializer=delivery__pb2.UpdateDeliveryStatusRequest.FromString,
+                    response_serializer=delivery__pb2.UpdateDeliveryStatusResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -172,6 +188,33 @@ class DeliveryService:
             '/delivery.DeliveryService/GetDeliveryByOrder',
             delivery__pb2.GetDeliveryByOrderRequest.SerializeToString,
             delivery__pb2.GetDeliveryByOrderResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateDeliveryStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/delivery.DeliveryService/UpdateDeliveryStatus',
+            delivery__pb2.UpdateDeliveryStatusRequest.SerializeToString,
+            delivery__pb2.UpdateDeliveryStatusResponse.FromString,
             options,
             channel_credentials,
             insecure,
