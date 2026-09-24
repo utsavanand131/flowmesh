@@ -73,7 +73,10 @@ def process_event(
         data,
     )
 
-    if event_type != "delivery.assigned":
+    if event_type not in {
+        "delivery.assigned",
+        "delivery.status_updated",
+    }:
         print(
             "Ignoring unsupported delivery event:",
             event_type,
@@ -102,26 +105,19 @@ def process_event(
             order.status,
         )
 
-        if order.status == "PENDING":
-            order.status = "CONFIRMED"
-
-            db.commit()
-
-            print(
-                "Order status updated:",
-                f"{order_id} → CONFIRMED",
+        if event_type == "delivery.assigned":
+            handle_delivery_assigned(
+                db=db,
+                order=order,
+                order_id=order_id,
             )
 
-        elif order.status == "CONFIRMED":
-            print(
-                "Order already confirmed. "
-                "Treating event as already processed."
-            )
-
-        else:
-            print(
-                "Order is not in PENDING state. "
-                f"Current status: {order.status}"
+        elif event_type == "delivery.status_updated":
+            handle_delivery_status_updated(
+                db=db,
+                order=order,
+                order_id=order_id,
+                data=data,
             )
 
     except SQLAlchemyError:
@@ -138,6 +134,94 @@ def process_event(
         db.close()
 
     print()
+
+
+def handle_delivery_assigned(
+    db,
+    order,
+    order_id,
+):
+    if order.status == "PENDING":
+        order.status = "CONFIRMED"
+
+        db.commit()
+
+        print(
+            "Order status updated:",
+            f"{order_id} → CONFIRMED",
+        )
+
+    elif order.status == "CONFIRMED":
+        print(
+            "Order already confirmed. "
+            "Treating event as already processed."
+        )
+
+    else:
+        print(
+            "Order is not in PENDING state. "
+            f"Current status: {order.status}"
+        )
+
+
+def handle_delivery_status_updated(
+    db,
+    order,
+    order_id,
+    data,
+):
+    delivery_status = data.get(
+        "status"
+    )
+
+    if delivery_status is None:
+        print(
+            "Delivery status missing from event."
+        )
+
+        return
+
+    print(
+        "Delivery status:",
+        delivery_status,
+    )
+
+    if delivery_status in {
+        "PICKED_UP",
+        "IN_TRANSIT",
+    }:
+        print(
+            "Delivery status updated, "
+            "but order status remains:",
+            order.status,
+        )
+
+        return
+
+    if delivery_status == "DELIVERED":
+        if order.status == "DELIVERED":
+            print(
+                "Order already marked as DELIVERED. "
+                "Treating event as already processed."
+            )
+
+            return
+
+        order.status = "DELIVERED"
+
+        db.commit()
+
+        print(
+            "Order status updated:",
+            f"{order_id} → DELIVERED",
+        )
+
+        return
+
+    print(
+        "Ignoring unsupported delivery status:",
+        delivery_status,
+    )
 
 
 def main():
