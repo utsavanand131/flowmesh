@@ -7,12 +7,15 @@ from . import delivery_pb2
 from . import delivery_pb2_grpc
 from . import order_pb2
 from . import order_pb2_grpc
+from .auth_routes import router as auth_router
 
 
 app = FastAPI(
     title="FlowMesh API Gateway",
     version="1.0.0",
 )
+
+app.include_router(auth_router)
 
 
 class CreateOrderRequest(BaseModel):
