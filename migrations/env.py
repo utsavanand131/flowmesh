@@ -52,9 +52,13 @@ if config.config_file_name is not None:
     )
 
 
-# Import the SAME database module used by models.py
+# Import the SAME database module used by the existing models
 from database import Base
 import models
+
+# Import authentication models so Alembic
+# registers them with Base.metadata
+from gateway.app.auth_models import User, OAuthAccount
 
 
 target_metadata = Base.metadata
@@ -67,12 +71,18 @@ def include_object(
     reflected,
     compare_to,
 ):
+    """
+    Control which database objects Alembic manages.
+    """
+
     # Ignore database tables that are not owned
-    # by the Order Service.
+    # by FlowMesh.
     if type_ == "table" and reflected:
         if name not in {
             "orders",
             "outbox_events",
+            "users",
+            "oauth_accounts",
         }:
             return False
 
