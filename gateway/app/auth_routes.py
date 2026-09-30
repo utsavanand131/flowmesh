@@ -42,6 +42,15 @@ GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3001")
 
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax").lower()
+
+if COOKIE_SAMESITE not in {"lax", "strict", "none"}:
+    raise ValueError("COOKIE_SAMESITE must be 'lax', 'strict', or 'none'")
+
+if COOKIE_SAMESITE == "none" and not COOKIE_SECURE:
+    raise ValueError("COOKIE_SECURE must be true when COOKIE_SAMESITE is 'none'")
+
 
 # -------------------------------------------------------------------
 # OAuth endpoints
@@ -98,8 +107,8 @@ def set_auth_cookie(response: Response, token: str) -> None:
         key="access_token",
         value=token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
         max_age=60 * 60 * 24 * 7,
         path="/",
     )
@@ -110,8 +119,8 @@ def set_google_oauth_state_cookie(response: Response, state: str) -> None:
         key="google_oauth_state",
         value=state,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
         max_age=600,
         path="/auth/google",
     )
@@ -121,6 +130,9 @@ def clear_google_oauth_state_cookie(response: Response) -> None:
     response.delete_cookie(
         key="google_oauth_state",
         path="/auth/google",
+        secure=COOKIE_SECURE,
+        httponly=True,
+        samesite=COOKIE_SAMESITE,
     )
 
 
@@ -129,8 +141,8 @@ def set_github_oauth_state_cookie(response: Response, state: str) -> None:
         key="github_oauth_state",
         value=state,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
         max_age=600,
         path="/auth/github",
     )
@@ -140,6 +152,9 @@ def clear_github_oauth_state_cookie(response: Response) -> None:
     response.delete_cookie(
         key="github_oauth_state",
         path="/auth/github",
+        secure=COOKIE_SECURE,
+        httponly=True,
+        samesite=COOKIE_SAMESITE,
     )
 
 
@@ -151,8 +166,8 @@ def set_github_code_verifier_cookie(
         key="github_code_verifier",
         value=code_verifier,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
         max_age=600,
         path="/auth/github",
     )
@@ -162,6 +177,9 @@ def clear_github_code_verifier_cookie(response: Response) -> None:
     response.delete_cookie(
         key="github_code_verifier",
         path="/auth/github",
+        secure=COOKIE_SECURE,
+        httponly=True,
+        samesite=COOKIE_SAMESITE,
     )
 
 
@@ -275,6 +293,9 @@ def logout(response: Response):
     response.delete_cookie(
         key="access_token",
         path="/",
+        secure=COOKIE_SECURE,
+        httponly=True,
+        samesite=COOKIE_SAMESITE,
     )
 
     return {
@@ -417,10 +438,7 @@ def google_callback(
             detail="Google OAuth state cookie is missing",
         )
 
-    if not secrets.compare_digest(
-        state,
-        google_oauth_state,
-    ):
+    if not secrets.compare_digest(state, google_oauth_state):
         raise HTTPException(
             status_code=400,
             detail="Invalid Google OAuth state",
@@ -462,7 +480,6 @@ def google_callback(
             token_response.raise_for_status()
 
             tokens = token_response.json()
-
             access_token = tokens.get("access_token")
 
             if not access_token:
@@ -479,7 +496,6 @@ def google_callback(
             )
 
             userinfo_response.raise_for_status()
-
             google_user = userinfo_response.json()
 
     except httpx.HTTPError:
@@ -517,17 +533,13 @@ def google_callback(
         db.query(OAuthAccount)
         .filter(
             OAuthAccount.provider == "google",
-            OAuthAccount.provider_account_id
-            == google_account_id,
+            OAuthAccount.provider_account_id == google_account_id,
         )
         .first()
     )
 
     if oauth_account is not None:
-        user = db.get(
-            User,
-            oauth_account.user_id,
-        )
+        user = db.get(User, oauth_account.user_id)
 
         if user is None:
             raise HTTPException(
@@ -570,8 +582,7 @@ def google_callback(
                 db.query(OAuthAccount)
                 .filter(
                     OAuthAccount.provider == "google",
-                    OAuthAccount.provider_account_id
-                    == google_account_id,
+                    OAuthAccount.provider_account_id == google_account_id,
                 )
                 .first()
             )
@@ -582,10 +593,7 @@ def google_callback(
                     detail="Unable to link Google account",
                 )
 
-            user = db.get(
-                User,
-                existing_account.user_id,
-            )
+            user = db.get(User, existing_account.user_id)
 
             if user is None:
                 raise HTTPException(
@@ -632,9 +640,7 @@ def github_login():
 
     # PKCE verifier/challenge.
     code_verifier = secrets.token_urlsafe(64)
-    code_challenge = create_pkce_code_challenge(
-        code_verifier
-    )
+    code_challenge = create_pkce_code_challenge(code_verifier)
 
     params = {
         "client_id": GITHUB_CLIENT_ID,
@@ -654,15 +660,8 @@ def github_login():
         status_code=302,
     )
 
-    set_github_oauth_state_cookie(
-        response,
-        state,
-    )
-
-    set_github_code_verifier_cookie(
-        response,
-        code_verifier,
-    )
+    set_github_oauth_state_cookie(response, state)
+    set_github_code_verifier_cookie(response, code_verifier)
 
     return response
 
@@ -715,10 +714,7 @@ def github_callback(
             detail="GitHub PKCE verifier cookie is missing",
         )
 
-    if not secrets.compare_digest(
-        state,
-        github_oauth_state,
-    ):
+    if not secrets.compare_digest(state, github_oauth_state):
         raise HTTPException(
             status_code=400,
             detail="Invalid GitHub OAuth state",
@@ -763,10 +759,7 @@ def github_callback(
             token_response.raise_for_status()
 
             tokens = token_response.json()
-
-            github_access_token = tokens.get(
-                "access_token"
-            )
+            github_access_token = tokens.get("access_token")
 
             if not github_access_token:
                 raise HTTPException(
@@ -775,9 +768,7 @@ def github_callback(
                 )
 
             api_headers = {
-                "Authorization": (
-                    f"Bearer {github_access_token}"
-                ),
+                "Authorization": f"Bearer {github_access_token}",
                 "Accept": "application/vnd.github+json",
                 "X-GitHub-Api-Version": "2022-11-28",
             }
@@ -788,7 +779,6 @@ def github_callback(
             )
 
             user_response.raise_for_status()
-
             github_user = user_response.json()
 
             emails_response = client.get(
@@ -797,7 +787,6 @@ def github_callback(
             )
 
             emails_response.raise_for_status()
-
             github_emails = emails_response.json()
 
     except httpx.HTTPError:
@@ -807,10 +796,7 @@ def github_callback(
         )
 
     github_account_id = github_user.get("id")
-    github_name = (
-        github_user.get("name")
-        or github_user.get("login")
-    )
+    github_name = github_user.get("name") or github_user.get("login")
 
     if not github_account_id:
         raise HTTPException(
@@ -829,8 +815,7 @@ def github_callback(
             github_email = email_entry.get("email")
             break
 
-    # Fallback to any verified email if a primary one
-    # wasn't returned.
+    # Fall back to any verified email if the primary one wasn't returned.
     if not github_email:
         for email_entry in github_emails:
             if email_entry.get("verified") is True:
@@ -849,17 +834,13 @@ def github_callback(
         db.query(OAuthAccount)
         .filter(
             OAuthAccount.provider == "github",
-            OAuthAccount.provider_account_id
-            == str(github_account_id),
+            OAuthAccount.provider_account_id == str(github_account_id),
         )
         .first()
     )
 
     if oauth_account is not None:
-        user = db.get(
-            User,
-            oauth_account.user_id,
-        )
+        user = db.get(User, oauth_account.user_id)
 
         if user is None:
             raise HTTPException(
@@ -887,9 +868,7 @@ def github_callback(
         oauth_account = OAuthAccount(
             user_id=user.id,
             provider="github",
-            provider_account_id=str(
-                github_account_id
-            ),
+            provider_account_id=str(github_account_id),
         )
 
         db.add(oauth_account)
@@ -904,8 +883,7 @@ def github_callback(
                 db.query(OAuthAccount)
                 .filter(
                     OAuthAccount.provider == "github",
-                    OAuthAccount.provider_account_id
-                    == str(github_account_id),
+                    OAuthAccount.provider_account_id == str(github_account_id),
                 )
                 .first()
             )
@@ -916,10 +894,7 @@ def github_callback(
                     detail="Unable to link GitHub account",
                 )
 
-            user = db.get(
-                User,
-                existing_account.user_id,
-            )
+            user = db.get(User, existing_account.user_id)
 
             if user is None:
                 raise HTTPException(
@@ -940,4 +915,3 @@ def github_callback(
     clear_github_code_verifier_cookie(response)
 
     return response
-
