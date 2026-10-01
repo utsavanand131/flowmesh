@@ -1,13 +1,17 @@
+
 import grpc
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, Field
 
 from . import delivery_pb2
 from . import delivery_pb2_grpc
 from . import order_pb2
 from . import order_pb2_grpc
-from .auth_routes import router as auth_router
+from .auth_routes import (
+    router as auth_router,
+    require_current_user,
+)
 
 
 app = FastAPI(
@@ -19,7 +23,6 @@ app.include_router(auth_router)
 
 
 class CreateOrderRequest(BaseModel):
-    user_id: str = Field(min_length=1)
     product_id: str = Field(min_length=1)
     quantity: int = Field(gt=0)
 
@@ -39,6 +42,7 @@ def health_check():
 @app.post("/orders")
 def create_order(
     request: CreateOrderRequest,
+    current_user=Depends(require_current_user),
 ):
     channel = grpc.insecure_channel(
         "localhost:50051"
@@ -49,7 +53,7 @@ def create_order(
     )
 
     grpc_request = order_pb2.CreateOrderRequest(
-        user_id=request.user_id,
+        user_id=current_user.id,
         product_id=request.product_id,
         quantity=request.quantity,
     )
@@ -98,6 +102,7 @@ def create_order(
 @app.get("/orders/{order_id}")
 def get_order(
     order_id: str,
+    current_user=Depends(require_current_user),
 ):
     channel = grpc.insecure_channel(
         "localhost:50051"
@@ -142,6 +147,13 @@ def get_order(
 
     finally:
         channel.close()
+
+    # Users can only retrieve their own orders.
+    if response.user_id != current_user.id:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found",
+        )
 
     delivery = None
 
