@@ -11,6 +11,7 @@ from . import order_pb2_grpc
 from .auth_routes import (
     router as auth_router,
     require_current_user,
+    require_admin_user,
 )
 
 
@@ -44,13 +45,9 @@ def create_order(
     request: CreateOrderRequest,
     current_user=Depends(require_current_user),
 ):
-    channel = grpc.insecure_channel(
-        "localhost:50051"
-    )
+    channel = grpc.insecure_channel("localhost:50051")
 
-    stub = order_pb2_grpc.OrderServiceStub(
-        channel
-    )
+    stub = order_pb2_grpc.OrderServiceStub(channel)
 
     grpc_request = order_pb2.CreateOrderRequest(
         user_id=current_user.id,
@@ -59,9 +56,7 @@ def create_order(
     )
 
     try:
-        response = stub.CreateOrder(
-            grpc_request
-        )
+        response = stub.CreateOrder(grpc_request)
 
     except grpc.RpcError as error:
         print(
@@ -104,22 +99,16 @@ def get_order(
     order_id: str,
     current_user=Depends(require_current_user),
 ):
-    channel = grpc.insecure_channel(
-        "localhost:50051"
-    )
+    channel = grpc.insecure_channel("localhost:50051")
 
-    stub = order_pb2_grpc.OrderServiceStub(
-        channel
-    )
+    stub = order_pb2_grpc.OrderServiceStub(channel)
 
     grpc_request = order_pb2.GetOrderRequest(
         order_id=order_id,
     )
 
     try:
-        response = stub.GetOrder(
-            grpc_request
-        )
+        response = stub.GetOrder(grpc_request)
 
     except grpc.RpcError as error:
         print(
@@ -177,6 +166,7 @@ def get_order(
 def update_delivery_status(
     delivery_id: str,
     request: UpdateDeliveryStatusRequest,
+    current_user=Depends(require_admin_user),
 ):
     allowed_statuses = {
         "PICKED_UP",
@@ -193,25 +183,17 @@ def update_delivery_status(
             ),
         )
 
-    channel = grpc.insecure_channel(
-        "localhost:50053"
-    )
+    channel = grpc.insecure_channel("localhost:50053")
 
-    stub = delivery_pb2_grpc.DeliveryServiceStub(
-        channel
-    )
+    stub = delivery_pb2_grpc.DeliveryServiceStub(channel)
 
-    grpc_request = (
-        delivery_pb2.UpdateDeliveryStatusRequest(
-            delivery_id=delivery_id,
-            status=request.status,
-        )
+    grpc_request = delivery_pb2.UpdateDeliveryStatusRequest(
+        delivery_id=delivery_id,
+        status=request.status,
     )
 
     try:
-        response = stub.UpdateDeliveryStatus(
-            grpc_request
-        )
+        response = stub.UpdateDeliveryStatus(grpc_request)
 
     except grpc.RpcError as error:
         print(

@@ -321,8 +321,7 @@ def logout(response: Response):
 # -------------------------------------------------------------------
 # Current authenticated user
 # -------------------------------------------------------------------
-
-
+ 
 def require_current_user(
     access_token: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
@@ -358,6 +357,7 @@ def require_current_user(
         )
 
     return user
+
 
 
 # -------------------------------------------------------------------
