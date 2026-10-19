@@ -1,3 +1,4 @@
+
 import uuid
 from datetime import datetime
 
@@ -5,6 +6,7 @@ from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -30,6 +32,13 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
+    )
+
+    role: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="CUSTOMER",
+        server_default="CUSTOMER",
     )
 
     created_at: Mapped[datetime] = mapped_column(
