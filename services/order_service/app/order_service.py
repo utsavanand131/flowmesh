@@ -1,3 +1,4 @@
+
 import json
 import uuid
 
@@ -109,3 +110,53 @@ class OrderManager:
             "order": order,
             "delivery": delivery,
         }
+
+    def update_order_status(
+        self,
+        db: Session,
+        order_id: str,
+        new_status: str,
+    ):
+        allowed_statuses = {
+            "PROCESSING",
+            "DELIVERED",
+        }
+
+        if new_status not in allowed_statuses:
+            return None, "INVALID_STATUS"
+
+        order = db.get(
+            Order,
+            order_id,
+        )
+
+        if order is None:
+            return None, "NOT_FOUND"
+
+        allowed_transitions = {
+            "PENDING": {"PROCESSING"},
+            "CONFIRMED": {"PROCESSING"},
+            "PROCESSING": {"DELIVERED"},
+            "DELIVERED": set(),
+        }
+
+        if order.status == new_status:
+            return order, None
+
+        if new_status not in allowed_transitions.get(
+            order.status,
+            set(),
+        ):
+            return None, "INVALID_TRANSITION"
+
+        order.status = new_status
+
+        try:
+            db.commit()
+            db.refresh(order)
+
+        except SQLAlchemyError:
+            db.rollback()
+            raise
+
+        return order, None
