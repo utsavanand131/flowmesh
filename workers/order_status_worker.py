@@ -16,6 +16,7 @@ CONSUMER_NAME = "order-status-worker-1"
 # A message must be idle for at least 60 seconds before recovery.
 PENDING_IDLE_THRESHOLD_MS = 60_000
 CLAIM_BATCH_SIZE = 10
+RECOVERY_INTERVAL_SECONDS = 30
 
 order_manager = OrderManager()
 
@@ -131,7 +132,10 @@ def acknowledge_event(message_id):
 
 
 def recover_pending_messages():
-    print("Checking for stale pending delivery events...")
+    print(
+    f"[{time.strftime('%H:%M:%S')}] "
+    "Checking for stale pending delivery events..."
+)
 
     start_id = "0-0"
 
@@ -193,6 +197,8 @@ def main():
     print("FlowMesh Order Status Worker running...")
     print("Listening to:", DELIVERY_EVENTS_STREAM)
 
+    last_recovery_time = time.monotonic()
+
     while True:
         try:
             messages = redis_client.xreadgroup(
@@ -224,7 +230,7 @@ def main():
                         )
 
         except redis.exceptions.TimeoutError:
-            continue
+            pass
 
         except redis.exceptions.RedisError as error:
             print("Redis worker error:", error)
@@ -233,6 +239,17 @@ def main():
         except Exception as error:
             print("Unexpected worker error:", error)
             time.sleep(2)
+
+        if (
+            time.monotonic() - last_recovery_time
+            >= RECOVERY_INTERVAL_SECONDS
+        ):
+            try:
+                recover_pending_messages()
+            except redis.exceptions.RedisError as error:
+                print("Periodic recovery failed:", error)
+
+            last_recovery_time = time.monotonic()
 
         time.sleep(0.1)
 
