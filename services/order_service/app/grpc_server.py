@@ -36,10 +36,21 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
 
             order = result["order"]
 
-            return order_pb2.CreateOrderResponse(
+            response = order_pb2.CreateOrderResponse(
                 order_id=order.order_id,
                 status=order.status,
             )
+
+            delivery = order_manager.get_order(
+                db=db,
+                order_id=order.order_id,
+            )["delivery"]
+
+            if delivery is not None:
+                response.delivery_id = delivery["delivery_id"]
+                response.delivery_status = delivery["status"]
+
+            return response
 
         except SQLAlchemyError:
             db.rollback()

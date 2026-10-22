@@ -85,12 +85,18 @@ def create_order(
     finally:
         channel.close()
 
+    delivery = None
+
+    if response.delivery_id:
+        delivery = {
+            "delivery_id": response.delivery_id,
+            "status": response.delivery_status,
+        }
+
     return {
         "order_id": response.order_id,
         "status": response.status,
-        "delivery": {
-            "status": "PROCESSING",
-        },
+        "delivery": delivery,
     }
 
 
