@@ -22,9 +22,7 @@ def test_create_order_requires_authentication(client):
 
 
 def test_get_order_requires_authentication(client):
-    response = client.get(
-        "/orders/test-order-id",
-    )
+    response = client.get("/orders/test-order-id")
 
     assert response.status_code == 401
 
@@ -36,3 +34,50 @@ def test_update_delivery_status_requires_admin(client):
     )
 
     assert response.status_code == 401
+
+
+def test_create_order_rejects_zero_quantity(authenticated_client):
+    response = authenticated_client.post(
+        "/orders",
+        json={
+            "product_id": "product_e2e_test",
+            "quantity": 0,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_order_rejects_negative_quantity(authenticated_client):
+    response = authenticated_client.post(
+        "/orders",
+        json={
+            "product_id": "product_e2e_test",
+            "quantity": -1,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_order_rejects_empty_product_id(authenticated_client):
+    response = authenticated_client.post(
+        "/orders",
+        json={
+            "product_id": "",
+            "quantity": 1,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_order_rejects_missing_product_id(authenticated_client):
+    response = authenticated_client.post(
+        "/orders",
+        json={
+            "quantity": 1,
+        },
+    )
+
+    assert response.status_code == 422
