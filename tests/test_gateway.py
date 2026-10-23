@@ -391,3 +391,143 @@ def test_get_order_service_unavailable(
     assert response.status_code == 503
     assert response.json()["detail"] == "Order service unavailable"
     mock_channel.close.assert_called_once()
+
+
+def test_customer_cannot_update_delivery_status(authenticated_client):
+    response = authenticated_client.patch(
+        "/deliveries/test-delivery-123/status",
+        json={"status": "PICKED_UP"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_admin_update_rejects_invalid_delivery_status(admin_client):
+    response = admin_client.patch(
+        "/deliveries/test-delivery-123/status",
+        json={"status": "UNKNOWN"},
+    )
+
+    assert response.status_code == 400
+    assert "Invalid delivery status" in response.json()["detail"]
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.delivery_pb2_grpc.DeliveryServiceStub")
+def test_admin_updates_delivery_status_successfully(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+    mock_stub.UpdateDeliveryStatus.return_value = MagicMock(
+        delivery_id="test-delivery-123",
+        order_id="test-order-123",
+        status="PICKED_UP",
+    )
+
+    response = admin_client.patch(
+        "/deliveries/test-delivery-123/status",
+        json={"status": "PICKED_UP"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "delivery_id": "test-delivery-123",
+        "order_id": "test-order-123",
+        "status": "PICKED_UP",
+    }
+
+    mock_stub.UpdateDeliveryStatus.assert_called_once()
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.delivery_pb2_grpc.DeliveryServiceStub")
+def test_admin_update_delivery_not_found(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    error = grpc.RpcError()
+    error.code = lambda: grpc.StatusCode.NOT_FOUND
+    error.details = lambda: "Delivery not found"
+
+    mock_stub.UpdateDeliveryStatus.side_effect = error
+
+    response = admin_client.patch(
+        "/deliveries/missing-delivery/status",
+        json={"status": "DELIVERED"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Delivery not found"
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.delivery_pb2_grpc.DeliveryServiceStub")
+def test_admin_update_delivery_failed_precondition(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    error = grpc.RpcError()
+    error.code = lambda: grpc.StatusCode.FAILED_PRECONDITION
+    error.details = lambda: "Invalid delivery transition"
+
+    mock_stub.UpdateDeliveryStatus.side_effect = error
+
+    response = admin_client.patch(
+        "/deliveries/test-delivery-123/status",
+        json={"status": "DELIVERED"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Invalid delivery transition"
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.delivery_pb2_grpc.DeliveryServiceStub")
+def test_admin_update_delivery_service_unavailable(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    error = grpc.RpcError()
+    error.code = lambda: grpc.StatusCode.UNAVAILABLE
+    error.details = lambda: "Service unavailable"
+
+    mock_stub.UpdateDeliveryStatus.side_effect = error
+
+    response = admin_client.patch(
+        "/deliveries/test-delivery-123/status",
+        json={"status": "IN_TRANSIT"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Delivery service unavailable"
+    mock_channel.close.assert_called_once()
