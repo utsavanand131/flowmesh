@@ -229,3 +229,165 @@ def test_create_order_service_unavailable(
     assert response.status_code == 503
     assert response.json()["detail"] == "Order service unavailable"
     mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_get_order_success_without_delivery(
+    mock_stub_class,
+    mock_channel_factory,
+    authenticated_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+    mock_stub.GetOrder.return_value = MagicMock(
+        order_id="test-order-789",
+        user_id="test-user-id",
+        product_id="product_e2e_test",
+        quantity=2,
+        status="PENDING",
+        delivery_id="",
+        delivery_status="",
+    )
+
+    response = authenticated_client.get("/orders/test-order-789")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "order_id": "test-order-789",
+        "user_id": "test-user-id",
+        "product_id": "product_e2e_test",
+        "quantity": 2,
+        "status": "PENDING",
+        "delivery": None,
+    }
+
+    mock_stub.GetOrder.assert_called_once()
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_get_order_success_with_delivery(
+    mock_stub_class,
+    mock_channel_factory,
+    authenticated_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+    mock_stub.GetOrder.return_value = MagicMock(
+        order_id="test-order-101",
+        user_id="test-user-id",
+        product_id="product_e2e_test",
+        quantity=1,
+        status="PROCESSING",
+        delivery_id="test-delivery-101",
+        delivery_status="IN_TRANSIT",
+    )
+
+    response = authenticated_client.get("/orders/test-order-101")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "order_id": "test-order-101",
+        "user_id": "test-user-id",
+        "product_id": "product_e2e_test",
+        "quantity": 1,
+        "status": "PROCESSING",
+        "delivery": {
+            "delivery_id": "test-delivery-101",
+            "status": "IN_TRANSIT",
+        },
+    }
+
+    mock_stub.GetOrder.assert_called_once()
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_get_order_not_found(
+    mock_stub_class,
+    mock_channel_factory,
+    authenticated_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    error = grpc.RpcError()
+    error.code = lambda: grpc.StatusCode.NOT_FOUND
+    error.details = lambda: "Order not found"
+
+    mock_stub.GetOrder.side_effect = error
+
+    response = authenticated_client.get("/orders/missing-order")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Order not found"
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_get_order_hides_another_users_order(
+    mock_stub_class,
+    mock_channel_factory,
+    authenticated_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+    mock_stub.GetOrder.return_value = MagicMock(
+        order_id="another-users-order",
+        user_id="different-user-id",
+        product_id="product_e2e_test",
+        quantity=1,
+        status="PENDING",
+        delivery_id="",
+        delivery_status="",
+    )
+
+    response = authenticated_client.get(
+        "/orders/another-users-order"
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Order not found"
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_get_order_service_unavailable(
+    mock_stub_class,
+    mock_channel_factory,
+    authenticated_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    error = grpc.RpcError()
+    error.code = lambda: grpc.StatusCode.UNAVAILABLE
+    error.details = lambda: "Service unavailable"
+
+    mock_stub.GetOrder.side_effect = error
+
+    response = authenticated_client.get("/orders/test-order-123")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Order service unavailable"
+    mock_channel.close.assert_called_once()
