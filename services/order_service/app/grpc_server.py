@@ -1,3 +1,4 @@
+
 from concurrent import futures
 
 import grpc
@@ -6,8 +7,8 @@ from sqlalchemy.exc import SQLAlchemyError
 import order_pb2
 import order_pb2_grpc
 
-from database import SessionLocal
-from order_service import OrderManager
+from services.order_service.app.database import SessionLocal
+from services.order_service.app.order_service import OrderManager
 
 
 order_manager = OrderManager()
@@ -29,9 +30,7 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
                 context.set_code(
                     grpc.StatusCode.FAILED_PRECONDITION
                 )
-                context.set_details(
-                    "Insufficient inventory"
-                )
+                context.set_details("Insufficient inventory")
                 return order_pb2.CreateOrderResponse()
 
             order = result["order"]
@@ -54,29 +53,14 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
 
         except SQLAlchemyError:
             db.rollback()
-
-            context.set_code(
-                grpc.StatusCode.INTERNAL
-            )
-            context.set_details(
-                "Failed to create order"
-            )
-
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to create order")
             return order_pb2.CreateOrderResponse()
 
         except Exception as error:
-            print(
-                "Order creation error:",
-                error,
-            )
-
-            context.set_code(
-                grpc.StatusCode.INTERNAL
-            )
-            context.set_details(
-                "Failed to create order"
-            )
-
+            print("Order creation error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to create order")
             return order_pb2.CreateOrderResponse()
 
         finally:
@@ -92,13 +76,8 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
             )
 
             if result is None:
-                context.set_code(
-                    grpc.StatusCode.NOT_FOUND
-                )
-                context.set_details(
-                    "Order not found"
-                )
-
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details("Order not found")
                 return order_pb2.GetOrderResponse()
 
             order = result["order"]
@@ -120,32 +99,17 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
 
         except SQLAlchemyError:
             db.rollback()
-
-            context.set_code(
-                grpc.StatusCode.INTERNAL
-            )
-            context.set_details(
-                "Failed to retrieve order"
-            )
-
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve order")
             return order_pb2.GetOrderResponse()
 
         except grpc.RpcError:
             raise
 
         except Exception as error:
-            print(
-                "Get order error:",
-                error,
-            )
-
-            context.set_code(
-                grpc.StatusCode.INTERNAL
-            )
-            context.set_details(
-                "Failed to retrieve order"
-            )
-
+            print("Get order error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve order")
             return order_pb2.GetOrderResponse()
 
         finally:
@@ -154,9 +118,7 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
 
 def serve():
     server = grpc.server(
-        futures.ThreadPoolExecutor(
-            max_workers=10
-        )
+        futures.ThreadPoolExecutor(max_workers=10)
     )
 
     order_pb2_grpc.add_OrderServiceServicer_to_server(
@@ -164,17 +126,10 @@ def serve():
         server,
     )
 
-    server.add_insecure_port(
-        "[::]:50051"
-    )
-
+    server.add_insecure_port("[::]:50051")
     server.start()
 
-    print(
-        "FlowMesh Order Service gRPC server "
-        "running on port 50051"
-    )
-
+    print("FlowMesh Order Service gRPC server running on port 50051")
     server.wait_for_termination()
 
 

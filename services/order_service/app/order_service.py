@@ -9,7 +9,7 @@ from delivery_client import get_delivery_by_order
 from inventory_client import check_stock
 from inventory_client import release_stock
 from inventory_client import reserve_stock
-from models import Order, OutboxEvent
+from services.order_service.app.models import Order, OutboxEvent
 
 
 class OrderManager:

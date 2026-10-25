@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import Boolean, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from database import Base
+from services.order_service.app.database import Base
 
 
 class Order(Base):
