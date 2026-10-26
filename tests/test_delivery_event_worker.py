@@ -44,6 +44,7 @@ def order():
 # Consumer group tests
 # -------------------------
 
+
 def test_ensure_consumer_group_creates_group(mock_redis):
     worker.ensure_consumer_group()
 
@@ -75,6 +76,7 @@ def test_ensure_consumer_group_reraises_other_errors(mock_redis):
 # -------------------------
 # Delivery assignment tests
 # -------------------------
+
 
 def test_delivery_assigned_confirms_pending_order(mock_db, order):
     worker.handle_delivery_assigned(
@@ -125,40 +127,16 @@ def test_delivery_assigned_ignores_other_order_statuses(
 # Delivery status tests
 # -------------------------
 
-def test_delivery_status_updated_marks_order_delivered(
-    mock_db, order
-):
-    worker.handle_delivery_status_updated(
-        db=mock_db,
-        order=order,
-        order_id="order_123",
-        data={"status": "DELIVERED"},
-    )
 
-    assert order.status == "DELIVERED"
-    mock_db.commit.assert_called_once()
-
-
-def test_delivery_status_updated_does_not_commit_already_delivered(
-    mock_db, order
-):
-    order.status = "DELIVERED"
-
-    worker.handle_delivery_status_updated(
-        db=mock_db,
-        order=order,
-        order_id="order_123",
-        data={"status": "DELIVERED"},
-    )
-
-    assert order.status == "DELIVERED"
-    mock_db.commit.assert_not_called()
-
-
-@pytest.mark.parametrize("status", ["PICKED_UP", "IN_TRANSIT"])
-def test_delivery_status_updated_keeps_order_status_unchanged(
+@pytest.mark.parametrize(
+    "status",
+    ["PICKED_UP", "IN_TRANSIT", "DELIVERED"],
+)
+def test_delivery_status_updated_does_not_change_order_status(
     mock_db, order, status
 ):
+    original_status = order.status
+
     worker.handle_delivery_status_updated(
         db=mock_db,
         order=order,
@@ -166,7 +144,7 @@ def test_delivery_status_updated_keeps_order_status_unchanged(
         data={"status": status},
     )
 
-    assert order.status == "PENDING"
+    assert order.status == original_status
     mock_db.commit.assert_not_called()
 
 
@@ -201,6 +179,7 @@ def test_delivery_status_updated_ignores_unknown_status(
 # process_event tests
 # -------------------------
 
+
 def test_process_event_confirms_order_and_closes_session(
     mock_db, order
 ):
@@ -220,7 +199,9 @@ def test_process_event_confirms_order_and_closes_session(
     mock_db.close.assert_called_once()
 
 
-def test_process_event_marks_order_delivered(mock_db, order):
+def test_process_event_delivery_status_does_not_update_order(
+    mock_db, order
+):
     mock_db.get.return_value = order
 
     worker.process_event(
@@ -232,8 +213,8 @@ def test_process_event_marks_order_delivered(mock_db, order):
         },
     )
 
-    assert order.status == "DELIVERED"
-    mock_db.commit.assert_called_once()
+    assert order.status == "PENDING"
+    mock_db.commit.assert_not_called()
     mock_db.close.assert_called_once()
 
 
@@ -304,6 +285,7 @@ def test_process_event_invalid_json_does_not_open_session():
 # -------------------------
 # Main loop tests
 # -------------------------
+
 
 def test_main_acknowledges_successful_event(mock_redis):
     event_fields = {
@@ -413,6 +395,7 @@ def test_main_handles_redis_worker_error(mock_redis):
 # -------------------------
 # Pending-message recovery tests
 # -------------------------
+
 
 def test_recover_pending_messages_acknowledges_success(mock_redis):
     event_fields = {
@@ -528,9 +511,7 @@ def test_recover_pending_messages_processes_multiple_batches(
         worker.recover_pending_messages()
 
     assert process_event.call_count == 2
-
     assert mock_redis.xack.call_count == 2
-
     assert mock_redis.xautoclaim.call_count == 2
 
     assert (

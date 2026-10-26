@@ -125,35 +125,28 @@ def handle_delivery_status_updated(db, order, order_id, data):
 
     print("Delivery status:", delivery_status)
 
-    if delivery_status in {"PICKED_UP", "IN_TRANSIT"}:
+    if delivery_status in {"PICKED_UP", "IN_TRANSIT", "DELIVERED"}:
         print(
-            "Delivery status updated, but order status remains:",
+            "Delivery progress is handled by "
+            "order_status_worker. Order status remains:",
             order.status,
         )
-        return
-
-    if delivery_status == "DELIVERED":
-        if order.status == "DELIVERED":
-            print(
-                "Order already marked as DELIVERED. "
-                "Treating event as already processed."
-            )
-            return
-
-        order.status = "DELIVERED"
-        db.commit()
-        print("Order status updated:", f"{order_id} -> DELIVERED")
         return
 
     print("Ignoring unsupported delivery status:", delivery_status)
 
 
 def acknowledge_event(message_id):
-    redis_client.xack(
+    acknowledged = redis_client.xack(
         DELIVERY_EVENTS_STREAM,
         CONSUMER_GROUP,
         message_id,
     )
+
+    if acknowledged:
+        print("Event acknowledged:", message_id)
+    else:
+        print("Event was not acknowledged:", message_id)
 
 
 def recover_pending_messages():
