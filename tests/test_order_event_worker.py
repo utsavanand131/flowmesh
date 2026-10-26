@@ -236,3 +236,123 @@ def test_main_does_not_acknowledge_failed_event(
     )
 
     mock_redis.xack.assert_not_called()
+
+
+# -------------------------
+# pending-message recovery tests
+# -------------------------
+
+@patch.object(worker, "acknowledge_event")
+@patch.object(worker, "process_event")
+@patch.object(worker, "redis_client")
+def test_recover_pending_messages_processes_and_acknowledges_event(
+    mock_redis,
+    mock_process_event,
+    mock_acknowledge,
+):
+    mock_process_event.return_value = True
+
+    event_fields = {
+        "event_type": "order.created",
+        "order_id": "order_123",
+        "data": "{}",
+    }
+
+    mock_redis.xautoclaim.side_effect = [
+        ("0-0", [("message_10", event_fields)], []),
+    ]
+
+    worker.recover_pending_messages()
+
+    mock_redis.xautoclaim.assert_called_once_with(
+        name=worker.ORDER_EVENTS_STREAM,
+        groupname=worker.CONSUMER_GROUP,
+        consumername=worker.CONSUMER_NAME,
+        min_idle_time=worker.PENDING_IDLE_THRESHOLD_MS,
+        start_id="0-0",
+        count=worker.CLAIM_BATCH_SIZE,
+    )
+
+    mock_process_event.assert_called_once_with(
+        "message_10",
+        event_fields,
+    )
+    mock_acknowledge.assert_called_once_with("message_10")
+
+
+@patch.object(worker, "acknowledge_event")
+@patch.object(worker, "process_event")
+@patch.object(worker, "redis_client")
+def test_recover_pending_messages_does_not_acknowledge_failed_event(
+    mock_redis,
+    mock_process_event,
+    mock_acknowledge,
+):
+    mock_process_event.return_value = False
+
+    event_fields = {
+        "event_type": "order.created",
+        "order_id": "order_123",
+        "data": "{}",
+    }
+
+    mock_redis.xautoclaim.return_value = (
+        "0-0",
+        [("message_11", event_fields)],
+        [],
+    )
+
+    worker.recover_pending_messages()
+
+    mock_process_event.assert_called_once_with(
+        "message_11",
+        event_fields,
+    )
+    mock_acknowledge.assert_not_called()
+
+
+@patch.object(worker, "acknowledge_event")
+@patch.object(worker, "process_event")
+@patch.object(worker, "redis_client")
+def test_recover_pending_messages_leaves_exception_event_pending(
+    mock_redis,
+    mock_process_event,
+    mock_acknowledge,
+):
+    mock_process_event.side_effect = RuntimeError(
+        "Delivery service unavailable"
+    )
+
+    event_fields = {
+        "event_type": "order.created",
+        "order_id": "order_123",
+        "data": "{}",
+    }
+
+    mock_redis.xautoclaim.return_value = (
+        "0-0",
+        [("message_12", event_fields)],
+        [],
+    )
+
+    worker.recover_pending_messages()
+
+    mock_process_event.assert_called_once_with(
+        "message_12",
+        event_fields,
+    )
+    mock_acknowledge.assert_not_called()
+
+
+@patch.object(worker, "redis_client")
+def test_recover_pending_messages_handles_redis_error(mock_redis):
+    import redis
+
+    mock_redis.xautoclaim.side_effect = redis.exceptions.RedisError(
+        "Redis unavailable"
+    )
+
+    # Recovery should handle Redis errors without crashing the worker.
+    worker.recover_pending_messages()
+
+    mock_redis.xautoclaim.assert_called_once()
