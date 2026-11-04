@@ -99,7 +99,7 @@ def test_no_pending_delivery_events(
 
 @patch.object(publisher, "publish_delivery_event")
 @patch.object(publisher, "SessionLocal")
-def test_delivery_publish_failure_rolls_back(
+def test_delivery_publish_failure_does_not_mark_published(
     mock_session_local,
     mock_publish,
 ):
@@ -125,7 +125,7 @@ def test_delivery_publish_failure_rolls_back(
 
     assert event.published is False
     db.commit.assert_not_called()
-    db.rollback.assert_called_once()
+    db.rollback.assert_not_called()
     db.close.assert_called_once()
 
 
@@ -135,7 +135,7 @@ def test_delivery_publish_failure_rolls_back(
 
 @patch.object(publisher, "publish_delivery_event")
 @patch.object(publisher, "SessionLocal")
-def test_invalid_delivery_payload_rolls_back(
+def test_invalid_delivery_payload_does_not_mark_published(
     mock_session_local,
     mock_publish,
 ):
@@ -151,7 +151,7 @@ def test_invalid_delivery_payload_rolls_back(
     mock_publish.assert_not_called()
     assert event.published is False
     db.commit.assert_not_called()
-    db.rollback.assert_called_once()
+    db.rollback.assert_not_called()
     db.close.assert_called_once()
 
 
@@ -236,7 +236,10 @@ def test_publishes_multiple_delivery_events(
 
     assert first_event.published is True
     assert second_event.published is True
-    assert db.commit.call_count == 2
+
+    # One transaction for the entire batch.
+    db.commit.assert_called_once()
+
     db.rollback.assert_not_called()
     db.close.assert_called_once()
 
@@ -278,7 +281,7 @@ def test_continues_after_delivery_event_failure(
     assert first_event.published is False
     assert second_event.published is True
 
-    db.rollback.assert_called_once()
+    db.rollback.assert_not_called()
     db.commit.assert_called_once()
     db.close.assert_called_once()
 

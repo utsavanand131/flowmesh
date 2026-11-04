@@ -1,5 +1,4 @@
 
-import json
 from unittest.mock import MagicMock, patch
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -22,10 +21,6 @@ def make_outbox_event(
         published=published,
     )
 
-
-# -------------------------
-# Successful publishing
-# -------------------------
 
 @patch.object(publisher, "publish_order_event")
 @patch.object(publisher, "SessionLocal")
@@ -66,10 +61,6 @@ def test_publish_pending_event_success(
     db.close.assert_called_once()
 
 
-# -------------------------
-# No pending events
-# -------------------------
-
 @patch.object(publisher, "publish_order_event")
 @patch.object(publisher, "SessionLocal")
 def test_publish_pending_events_when_none_exist(
@@ -96,13 +87,9 @@ def test_publish_pending_events_when_none_exist(
     db.close.assert_called_once()
 
 
-# -------------------------
-# Publishing failure
-# -------------------------
-
 @patch.object(publisher, "publish_order_event")
 @patch.object(publisher, "SessionLocal")
-def test_publish_event_failure_rolls_back(
+def test_publish_event_failure_does_not_mark_published(
     mock_session_local,
     mock_publish,
 ):
@@ -136,18 +123,14 @@ def test_publish_event_failure_rolls_back(
     )
 
     assert event.published is False
-    db.rollback.assert_called_once()
+    db.rollback.assert_not_called()
     db.commit.assert_not_called()
     db.close.assert_called_once()
 
 
-# -------------------------
-# Invalid JSON payload
-# -------------------------
-
 @patch.object(publisher, "publish_order_event")
 @patch.object(publisher, "SessionLocal")
-def test_invalid_payload_rolls_back(
+def test_invalid_payload_does_not_mark_published(
     mock_session_local,
     mock_publish,
 ):
@@ -171,14 +154,10 @@ def test_invalid_payload_rolls_back(
 
     mock_publish.assert_not_called()
     assert event.published is False
-    db.rollback.assert_called_once()
+    db.rollback.assert_not_called()
     db.commit.assert_not_called()
     db.close.assert_called_once()
 
-
-# -------------------------
-# Database query failure
-# -------------------------
 
 @patch.object(publisher, "SessionLocal")
 def test_database_query_failure_rolls_back_and_closes(
@@ -197,10 +176,6 @@ def test_database_query_failure_rolls_back_and_closes(
     db.commit.assert_not_called()
     db.close.assert_called_once()
 
-
-# -------------------------
-# Multiple events
-# -------------------------
 
 @patch.object(publisher, "publish_order_event")
 @patch.object(publisher, "SessionLocal")
@@ -263,14 +238,13 @@ def test_publishes_multiple_events(
 
     assert first_event.published is True
     assert second_event.published is True
-    assert db.commit.call_count == 2
+
+    # One transaction for the entire batch.
+    db.commit.assert_called_once()
+
     db.rollback.assert_not_called()
     db.close.assert_called_once()
 
-
-# -------------------------
-# Continue after one event fails
-# -------------------------
 
 @patch.object(publisher, "publish_order_event")
 @patch.object(publisher, "SessionLocal")
@@ -310,9 +284,14 @@ def test_continues_after_one_event_fails(
     publisher.publish_pending_events()
 
     assert mock_publish.call_count == 2
+
     assert first_event.published is False
     assert second_event.published is True
 
-    assert db.rollback.call_count == 1
-    assert db.commit.call_count == 1
+    # The successful event is committed.
+    db.commit.assert_called_once()
+
+    # The failed event does not roll back the entire batch.
+    db.rollback.assert_not_called()
+
     db.close.assert_called_once()

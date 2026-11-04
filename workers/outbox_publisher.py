@@ -32,11 +32,14 @@ def publish_pending_events():
             .all()
         )
 
+        if not events:
+            return
+
+        published_count = 0
+
         for event in events:
             try:
-                payload = json.loads(
-                    event.payload
-                )
+                payload = json.loads(event.payload)
 
                 message_id = publish_order_event(
                     event_id=event.event_id,
@@ -46,8 +49,7 @@ def publish_pending_events():
                 )
 
                 event.published = True
-
-                db.commit()
+                published_count += 1
 
                 print(
                     "Published outbox event:",
@@ -60,8 +62,6 @@ def publish_pending_events():
                 )
 
             except Exception as error:
-                db.rollback()
-
                 print(
                     "Failed to publish outbox event:",
                     event.event_id,
@@ -72,11 +72,14 @@ def publish_pending_events():
                     error,
                 )
 
+        if published_count > 0:
+            db.commit()
+
     except SQLAlchemyError as error:
         db.rollback()
 
         print(
-            "Database error while reading "
+            "Database error while processing "
             "outbox events:",
             error,
         )
@@ -104,9 +107,7 @@ def main():
                 error,
             )
 
-        time.sleep(
-            POLL_INTERVAL
-        )
+        time.sleep(POLL_INTERVAL)
 
 
 if __name__ == "__main__":
