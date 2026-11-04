@@ -1,6 +1,6 @@
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -8,7 +8,7 @@ from workers import delivery_outbox_publisher as publisher
 
 
 def make_outbox_event(
-    event_id=1,
+    event_id="event-123",
     event_type="delivery.updated",
     aggregate_id="order_123",
     payload='{"delivery_id": "delivery_123", "status": "IN_TRANSIT"}',
@@ -27,9 +27,13 @@ def make_session(events=None):
     db = MagicMock()
 
     query = db.query.return_value
-    query.filter.return_value.order_by.return_value.limit.return_value.with_for_update.return_value.all.return_value = (
-        events if events is not None else []
-    )
+    (
+        query.filter.return_value
+        .order_by.return_value
+        .limit.return_value
+        .with_for_update.return_value
+        .all.return_value
+    ) = events if events is not None else []
 
     return db
 
@@ -53,6 +57,7 @@ def test_publish_delivery_event_success(
     publisher.publish_pending_events()
 
     mock_publish.assert_called_once_with(
+        event_id="event-123",
         event_type="delivery.updated",
         order_id="order_123",
         data={
@@ -108,6 +113,16 @@ def test_delivery_publish_failure_rolls_back(
 
     publisher.publish_pending_events()
 
+    mock_publish.assert_called_once_with(
+        event_id="event-123",
+        event_type="delivery.updated",
+        order_id="order_123",
+        data={
+            "delivery_id": "delivery_123",
+            "status": "IN_TRANSIT",
+        },
+    )
+
     assert event.published is False
     db.commit.assert_not_called()
     db.rollback.assert_called_once()
@@ -124,7 +139,9 @@ def test_invalid_delivery_payload_rolls_back(
     mock_session_local,
     mock_publish,
 ):
-    event = make_outbox_event(payload="{invalid-json")
+    event = make_outbox_event(
+        payload="{invalid-json"
+    )
     db = make_session([event])
 
     mock_session_local.return_value = db
@@ -171,17 +188,21 @@ def test_publishes_multiple_delivery_events(
     mock_publish,
 ):
     first_event = make_outbox_event(
-        event_id=1,
+        event_id="event-123",
         aggregate_id="order_123",
     )
 
     second_event = make_outbox_event(
-        event_id=2,
+        event_id="event-456",
         aggregate_id="order_456",
         payload='{"delivery_id": "delivery_456", "status": "DELIVERED"}',
     )
 
-    db = make_session([first_event, second_event])
+    db = make_session([
+        first_event,
+        second_event,
+    ])
+
     mock_session_local.return_value = db
 
     mock_publish.side_effect = [
@@ -192,6 +213,27 @@ def test_publishes_multiple_delivery_events(
     publisher.publish_pending_events()
 
     assert mock_publish.call_count == 2
+
+    assert mock_publish.call_args_list[0].kwargs == {
+        "event_id": "event-123",
+        "event_type": "delivery.updated",
+        "order_id": "order_123",
+        "data": {
+            "delivery_id": "delivery_123",
+            "status": "IN_TRANSIT",
+        },
+    }
+
+    assert mock_publish.call_args_list[1].kwargs == {
+        "event_id": "event-456",
+        "event_type": "delivery.updated",
+        "order_id": "order_456",
+        "data": {
+            "delivery_id": "delivery_456",
+            "status": "DELIVERED",
+        },
+    }
+
     assert first_event.published is True
     assert second_event.published is True
     assert db.commit.call_count == 2
@@ -209,13 +251,20 @@ def test_continues_after_delivery_event_failure(
     mock_session_local,
     mock_publish,
 ):
-    first_event = make_outbox_event(event_id=1)
+    first_event = make_outbox_event(
+        event_id="event-123"
+    )
+
     second_event = make_outbox_event(
-        event_id=2,
+        event_id="event-456",
         aggregate_id="order_456",
     )
 
-    db = make_session([first_event, second_event])
+    db = make_session([
+        first_event,
+        second_event,
+    ])
+
     mock_session_local.return_value = db
 
     mock_publish.side_effect = [
@@ -228,6 +277,7 @@ def test_continues_after_delivery_event_failure(
     assert mock_publish.call_count == 2
     assert first_event.published is False
     assert second_event.published is True
+
     db.rollback.assert_called_once()
     db.commit.assert_called_once()
     db.close.assert_called_once()
@@ -255,7 +305,16 @@ def test_delivery_commit_failure_rolls_back(
 
     publisher.publish_pending_events()
 
-    mock_publish.assert_called_once()
+    mock_publish.assert_called_once_with(
+        event_id="event-123",
+        event_type="delivery.updated",
+        order_id="order_123",
+        data={
+            "delivery_id": "delivery_123",
+            "status": "IN_TRANSIT",
+        },
+    )
+
     db.commit.assert_called_once()
     db.rollback.assert_called_once()
     db.close.assert_called_once()

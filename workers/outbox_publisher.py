@@ -1,3 +1,4 @@
+
 import json
 import time
 
@@ -38,6 +39,7 @@ def publish_pending_events():
                 )
 
                 message_id = publish_order_event(
+                    event_id=event.event_id,
                     event_type=event.event_type,
                     order_id=event.aggregate_id,
                     data=payload,

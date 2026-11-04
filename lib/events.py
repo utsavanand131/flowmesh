@@ -1,3 +1,4 @@
+
 import json
 from typing import Any
 
@@ -9,11 +10,13 @@ DELIVERY_EVENTS_STREAM = "flowmesh:delivery-events"
 
 
 def publish_order_event(
+    event_id: str,
     event_type: str,
     order_id: str,
     data: dict[str, Any],
 ):
     event = {
+        "event_id": event_id,
         "event_type": event_type,
         "order_id": order_id,
         "data": json.dumps(data),
@@ -28,11 +31,13 @@ def publish_order_event(
 
 
 def publish_delivery_event(
+    event_id: str,
     event_type: str,
     order_id: str,
     data: dict[str, Any],
 ):
     event = {
+        "event_id": event_id,
         "event_type": event_type,
         "order_id": order_id,
         "data": json.dumps(data),
