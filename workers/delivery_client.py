@@ -1,3 +1,4 @@
+
 import grpc
 
 from services.delivery_service.app import delivery_pb2
@@ -7,7 +8,7 @@ from services.delivery_service.app import delivery_pb2_grpc
 DELIVERY_SERVICE_ADDRESS = "localhost:50053"
 
 
-def create_delivery(order_id: str):
+def create_delivery(order_id: str, event_id: str):
     channel = grpc.insecure_channel(
         DELIVERY_SERVICE_ADDRESS
     )
@@ -18,12 +19,11 @@ def create_delivery(order_id: str):
 
     request = delivery_pb2.CreateDeliveryRequest(
         order_id=order_id,
+        event_id=event_id,
     )
 
     try:
-        response = stub.CreateDelivery(
-            request
-        )
+        response = stub.CreateDelivery(request)
 
         return {
             "delivery_id": response.delivery_id,

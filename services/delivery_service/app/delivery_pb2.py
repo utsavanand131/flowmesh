@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0e\x64\x65livery.proto\x12\x08\x64\x65livery\")\n\x15\x43reateDeliveryRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\"O\n\x16\x43reateDeliveryResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\")\n\x12GetDeliveryRequest\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\"L\n\x13GetDeliveryResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\"-\n\x19GetDeliveryByOrderRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\"S\n\x1aGetDeliveryByOrderResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\"B\n\x1bUpdateDeliveryStatusRequest\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\"U\n\x1cUpdateDeliveryStatusResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t2\xfa\x02\n\x0f\x44\x65liveryService\x12S\n\x0e\x43reateDelivery\x12\x1f.delivery.CreateDeliveryRequest\x1a .delivery.CreateDeliveryResponse\x12J\n\x0bGetDelivery\x12\x1c.delivery.GetDeliveryRequest\x1a\x1d.delivery.GetDeliveryResponse\x12_\n\x12GetDeliveryByOrder\x12#.delivery.GetDeliveryByOrderRequest\x1a$.delivery.GetDeliveryByOrderResponse\x12\x65\n\x14UpdateDeliveryStatus\x12%.delivery.UpdateDeliveryStatusRequest\x1a&.delivery.UpdateDeliveryStatusResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0e\x64\x65livery.proto\x12\x08\x64\x65livery\";\n\x15\x43reateDeliveryRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\x12\x10\n\x08\x65vent_id\x18\x02 \x01(\t\"O\n\x16\x43reateDeliveryResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\")\n\x12GetDeliveryRequest\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\"L\n\x13GetDeliveryResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\"-\n\x19GetDeliveryByOrderRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\"S\n\x1aGetDeliveryByOrderResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\"B\n\x1bUpdateDeliveryStatusRequest\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\"U\n\x1cUpdateDeliveryStatusResponse\x12\x13\n\x0b\x64\x65livery_id\x18\x01 \x01(\t\x12\x10\n\x08order_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t2\xfa\x02\n\x0f\x44\x65liveryService\x12S\n\x0e\x43reateDelivery\x12\x1f.delivery.CreateDeliveryRequest\x1a .delivery.CreateDeliveryResponse\x12J\n\x0bGetDelivery\x12\x1c.delivery.GetDeliveryRequest\x1a\x1d.delivery.GetDeliveryResponse\x12_\n\x12GetDeliveryByOrder\x12#.delivery.GetDeliveryByOrderRequest\x1a$.delivery.GetDeliveryByOrderResponse\x12\x65\n\x14UpdateDeliveryStatus\x12%.delivery.UpdateDeliveryStatusRequest\x1a&.delivery.UpdateDeliveryStatusResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,21 +32,21 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'delivery_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_CREATEDELIVERYREQUEST']._serialized_start=28
-  _globals['_CREATEDELIVERYREQUEST']._serialized_end=69
-  _globals['_CREATEDELIVERYRESPONSE']._serialized_start=71
-  _globals['_CREATEDELIVERYRESPONSE']._serialized_end=150
-  _globals['_GETDELIVERYREQUEST']._serialized_start=152
-  _globals['_GETDELIVERYREQUEST']._serialized_end=193
-  _globals['_GETDELIVERYRESPONSE']._serialized_start=195
-  _globals['_GETDELIVERYRESPONSE']._serialized_end=271
-  _globals['_GETDELIVERYBYORDERREQUEST']._serialized_start=273
-  _globals['_GETDELIVERYBYORDERREQUEST']._serialized_end=318
-  _globals['_GETDELIVERYBYORDERRESPONSE']._serialized_start=320
-  _globals['_GETDELIVERYBYORDERRESPONSE']._serialized_end=403
-  _globals['_UPDATEDELIVERYSTATUSREQUEST']._serialized_start=405
-  _globals['_UPDATEDELIVERYSTATUSREQUEST']._serialized_end=471
-  _globals['_UPDATEDELIVERYSTATUSRESPONSE']._serialized_start=473
-  _globals['_UPDATEDELIVERYSTATUSRESPONSE']._serialized_end=558
-  _globals['_DELIVERYSERVICE']._serialized_start=561
-  _globals['_DELIVERYSERVICE']._serialized_end=939
+  _globals['_CREATEDELIVERYREQUEST']._serialized_end=87
+  _globals['_CREATEDELIVERYRESPONSE']._serialized_start=89
+  _globals['_CREATEDELIVERYRESPONSE']._serialized_end=168
+  _globals['_GETDELIVERYREQUEST']._serialized_start=170
+  _globals['_GETDELIVERYREQUEST']._serialized_end=211
+  _globals['_GETDELIVERYRESPONSE']._serialized_start=213
+  _globals['_GETDELIVERYRESPONSE']._serialized_end=289
+  _globals['_GETDELIVERYBYORDERREQUEST']._serialized_start=291
+  _globals['_GETDELIVERYBYORDERREQUEST']._serialized_end=336
+  _globals['_GETDELIVERYBYORDERRESPONSE']._serialized_start=338
+  _globals['_GETDELIVERYBYORDERRESPONSE']._serialized_end=421
+  _globals['_UPDATEDELIVERYSTATUSREQUEST']._serialized_start=423
+  _globals['_UPDATEDELIVERYSTATUSREQUEST']._serialized_end=489
+  _globals['_UPDATEDELIVERYSTATUSRESPONSE']._serialized_start=491
+  _globals['_UPDATEDELIVERYSTATUSRESPONSE']._serialized_end=576
+  _globals['_DELIVERYSERVICE']._serialized_start=579
+  _globals['_DELIVERYSERVICE']._serialized_end=957
 # @@protoc_insertion_point(module_scope)

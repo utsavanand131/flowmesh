@@ -1,6 +1,8 @@
-import uuid
 
-from sqlalchemy import Boolean, String, Text
+import uuid
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
@@ -56,4 +58,29 @@ class OutboxEvent(Base):
         Boolean,
         nullable=False,
         default=False,
+    )
+
+
+class ProcessedEvent(Base):
+    __tablename__ = "processed_events"
+
+    event_id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+    )
+
+    event_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    aggregate_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+    )
+
+    processed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )

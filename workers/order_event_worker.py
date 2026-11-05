@@ -55,9 +55,18 @@ def process_event(message_id, fields=None):
             print("Skipping order.created event without an order_id")
             return True
 
+        event_id = fields.get("event_id")
+
+        if not event_id:
+            print("Order event is missing event_id")
+            return False
+
         # Let delivery exceptions propagate so the caller can leave
         # the message pending for retry.
-        result = create_delivery(order_id=order_id)
+        result = create_delivery(
+            order_id=order_id,
+            event_id=event_id,
+        )
 
         if isinstance(result, dict) and result.get("already_exists"):
             print(f"Delivery already exists for order {order_id}")
