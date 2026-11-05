@@ -4,10 +4,12 @@ import grpc
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, Field
 
-from . import delivery_pb2
-from . import delivery_pb2_grpc
-from . import order_pb2
-from . import order_pb2_grpc
+from services.delivery_service.app import delivery_pb2
+from services.delivery_service.app import delivery_pb2_grpc
+
+from services.order_service.app import order_pb2
+from services.order_service.app import order_pb2_grpc
+
 from .auth_routes import (
     router as auth_router,
     require_current_user,

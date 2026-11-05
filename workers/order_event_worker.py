@@ -41,12 +41,14 @@ def process_event(message_id, fields=None):
 
     event_type = fields.get("event_type")
     order_id = fields.get("order_id")
+    event_id = fields.get("event_id")
 
     # Invalid JSON raises JSONDecodeError; the message must not be ACKed.
     data = json.loads(fields.get("data", "{}"))
 
     print(f"Received event: {event_type}")
     print(f"Message ID: {message_id}")
+    print(f"Event ID: {event_id}")
     print(f"Order ID: {order_id}")
     print(f"Data: {data}")
 
@@ -54,8 +56,6 @@ def process_event(message_id, fields=None):
         if not order_id:
             print("Skipping order.created event without an order_id")
             return True
-
-        event_id = fields.get("event_id")
 
         if not event_id:
             print("Order event is missing event_id")
@@ -76,7 +76,7 @@ def process_event(message_id, fields=None):
             print(f"Could not create delivery for order {order_id}")
             return False
 
-        print(f"Delivery created for order {order_id}")
+        print(f"Delivery processed for order {order_id}")
         return True
 
     # Unsupported events are intentionally ignored and acknowledged.
@@ -85,7 +85,7 @@ def process_event(message_id, fields=None):
 
 
 def acknowledge_event(message_id):
-    """Acknowledge a successfully processed message."""
+    """Acknowledge a successfully processed Redis message."""
     redis_client.xack(
         ORDER_EVENTS_STREAM,
         CONSUMER_GROUP,

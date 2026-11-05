@@ -1,3 +1,4 @@
+
 from concurrent import futures
 
 import grpc
@@ -20,9 +21,30 @@ class DeliveryService(
         db = SessionLocal()
 
         try:
+            if not request.order_id:
+                context.set_code(
+                    grpc.StatusCode.INVALID_ARGUMENT
+                )
+                context.set_details(
+                    "order_id is required"
+                )
+
+                return delivery_pb2.CreateDeliveryResponse()
+
+            if not request.event_id:
+                context.set_code(
+                    grpc.StatusCode.INVALID_ARGUMENT
+                )
+                context.set_details(
+                    "event_id is required"
+                )
+
+                return delivery_pb2.CreateDeliveryResponse()
+
             delivery = delivery_manager.create_delivery(
                 db=db,
                 order_id=request.order_id,
+                event_id=request.event_id,
             )
 
             if delivery is None:
@@ -49,6 +71,18 @@ class DeliveryService(
             )
             context.set_details(
                 "Failed to create delivery"
+            )
+
+            return delivery_pb2.CreateDeliveryResponse()
+
+        except Exception:
+            db.rollback()
+
+            context.set_code(
+                grpc.StatusCode.INTERNAL
+            )
+            context.set_details(
+                "Unexpected error while creating delivery"
             )
 
             return delivery_pb2.CreateDeliveryResponse()

@@ -13,14 +13,15 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from auth import (
+from gateway.app.auth import (
     create_access_token,
     decode_access_token,
     hash_password,
     verify_password,
 )
-from auth_models import OAuthAccount, User
-from database import SessionLocal
+
+from gateway.app.auth_models import OAuthAccount, User
+from services.order_service.app.database import SessionLocal
 
 load_dotenv()
 

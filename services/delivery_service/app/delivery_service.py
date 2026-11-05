@@ -1,10 +1,11 @@
+
 import json
 import uuid
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from models import Delivery, OutboxEvent
+from models import Delivery, OutboxEvent, ProcessedEvent
 
 
 DELIVERY_STATUSES = {
@@ -20,7 +21,23 @@ class DeliveryManager:
         self,
         db: Session,
         order_id: str,
+        event_id: str,
     ):
+        if not event_id:
+            raise ValueError("event_id is required")
+
+        # Check whether this event has already been processed.
+        processed_event = db.get(
+            ProcessedEvent,
+            event_id,
+        )
+
+        if processed_event is not None:
+            return self.get_delivery_by_order(
+                db,
+                order_id,
+            )
+
         delivery = Delivery(
             delivery_id=str(uuid.uuid4()),
             order_id=order_id,
@@ -45,7 +62,14 @@ class DeliveryManager:
                 published=False,
             )
 
+            processed_event = ProcessedEvent(
+                event_id=event_id,
+                event_type="order.created",
+                aggregate_id=order_id,
+            )
+
             db.add(event)
+            db.add(processed_event)
 
             db.commit()
 
@@ -54,7 +78,24 @@ class DeliveryManager:
         except IntegrityError:
             db.rollback()
 
+            # A concurrent request may have processed
+            # the same event while this request was running.
+            processed_event = db.get(
+                ProcessedEvent,
+                event_id,
+            )
+
+            if processed_event is not None:
+                return self.get_delivery_by_order(
+                    db,
+                    order_id,
+                )
+
             return None
+
+        except Exception:
+            db.rollback()
+            raise
 
         return delivery
 

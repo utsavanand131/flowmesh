@@ -52,10 +52,11 @@ def test_ensure_consumer_group_reraises_other_errors(mock_redis):
 def test_process_order_created_event_creates_delivery(mock_create_delivery):
     mock_create_delivery.return_value = {
         "delivery_id": "delivery_123",
-        "already_exists": False,
+        "status": "ASSIGNED",
     }
 
     fields = {
+        "event_id": "event_123",
         "event_type": "order.created",
         "order_id": "order_123",
         "data": json.dumps({"product_id": "product_123"}),
@@ -64,8 +65,10 @@ def test_process_order_created_event_creates_delivery(mock_create_delivery):
     result = worker.process_event("message_1", fields)
 
     assert result is True
+
     mock_create_delivery.assert_called_once_with(
-        order_id="order_123"
+        order_id="order_123",
+        event_id="event_123",
     )
 
 
@@ -74,11 +77,12 @@ def test_process_order_created_event_handles_existing_delivery(
     mock_create_delivery,
 ):
     mock_create_delivery.return_value = {
-        "delivery_id": "delivery_123",
         "already_exists": True,
+        "status": "ALREADY_EXISTS",
     }
 
     fields = {
+        "event_id": "event_123",
         "event_type": "order.created",
         "order_id": "order_123",
         "data": "{}",
@@ -87,9 +91,27 @@ def test_process_order_created_event_handles_existing_delivery(
     result = worker.process_event("message_2", fields)
 
     assert result is True
+
     mock_create_delivery.assert_called_once_with(
-        order_id="order_123"
+        order_id="order_123",
+        event_id="event_123",
     )
+
+
+@patch.object(worker, "create_delivery")
+def test_process_order_created_event_rejects_missing_event_id(
+    mock_create_delivery,
+):
+    fields = {
+        "event_type": "order.created",
+        "order_id": "order_123",
+        "data": "{}",
+    }
+
+    result = worker.process_event("message_3", fields)
+
+    assert result is False
+    mock_create_delivery.assert_not_called()
 
 
 @patch.object(worker, "create_delivery")
@@ -102,7 +124,7 @@ def test_process_unknown_event_does_not_create_delivery(
         "data": "{}",
     }
 
-    result = worker.process_event("message_3", fields)
+    result = worker.process_event("message_4", fields)
 
     assert result is True
     mock_create_delivery.assert_not_called()
@@ -117,6 +139,7 @@ def test_process_event_propagates_delivery_failure(
     )
 
     fields = {
+        "event_id": "event_123",
         "event_type": "order.created",
         "order_id": "order_123",
         "data": "{}",
@@ -126,22 +149,24 @@ def test_process_event_propagates_delivery_failure(
         RuntimeError,
         match="Delivery service unavailable",
     ):
-        worker.process_event("message_4", fields)
+        worker.process_event("message_5", fields)
 
     mock_create_delivery.assert_called_once_with(
-        order_id="order_123"
+        order_id="order_123",
+        event_id="event_123",
     )
 
 
 def test_process_event_rejects_invalid_json():
     fields = {
+        "event_id": "event_123",
         "event_type": "order.created",
         "order_id": "order_123",
         "data": "{invalid-json",
     }
 
     with pytest.raises(json.JSONDecodeError):
-        worker.process_event("message_5", fields)
+        worker.process_event("message_6", fields)
 
 
 # -------------------------
@@ -161,6 +186,7 @@ def test_main_acknowledges_successfully_processed_event(
     mock_process_event.return_value = True
 
     event_fields = {
+        "event_id": "event_123",
         "event_type": "order.created",
         "order_id": "order_123",
         "data": "{}",
@@ -209,6 +235,7 @@ def test_main_does_not_acknowledge_failed_event(
     )
 
     event_fields = {
+        "event_id": "event_123",
         "event_type": "order.created",
         "order_id": "order_123",
         "data": "{}",
@@ -253,6 +280,7 @@ def test_recover_pending_messages_processes_and_acknowledges_event(
     mock_process_event.return_value = True
 
     event_fields = {
+        "event_id": "event_123",
         "event_type": "order.created",
         "order_id": "order_123",
         "data": "{}",
@@ -277,6 +305,7 @@ def test_recover_pending_messages_processes_and_acknowledges_event(
         "message_10",
         event_fields,
     )
+
     mock_acknowledge.assert_called_once_with("message_10")
 
 
@@ -291,6 +320,7 @@ def test_recover_pending_messages_does_not_acknowledge_failed_event(
     mock_process_event.return_value = False
 
     event_fields = {
+        "event_id": "event_123",
         "event_type": "order.created",
         "order_id": "order_123",
         "data": "{}",
@@ -308,6 +338,7 @@ def test_recover_pending_messages_does_not_acknowledge_failed_event(
         "message_11",
         event_fields,
     )
+
     mock_acknowledge.assert_not_called()
 
 
@@ -324,6 +355,7 @@ def test_recover_pending_messages_leaves_exception_event_pending(
     )
 
     event_fields = {
+        "event_id": "event_123",
         "event_type": "order.created",
         "order_id": "order_123",
         "data": "{}",
@@ -341,6 +373,7 @@ def test_recover_pending_messages_leaves_exception_event_pending(
         "message_12",
         event_fields,
     )
+
     mock_acknowledge.assert_not_called()
 
 
@@ -352,7 +385,6 @@ def test_recover_pending_messages_handles_redis_error(mock_redis):
         "Redis unavailable"
     )
 
-    # Recovery should handle Redis errors without crashing the worker.
     worker.recover_pending_messages()
 
     mock_redis.xautoclaim.assert_called_once()

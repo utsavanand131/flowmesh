@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import delivery_pb2 as delivery__pb2
+from services.delivery_service.app import delivery_pb2 as delivery__pb2
 
 GRPC_GENERATED_VERSION = '1.83.1'
 GRPC_VERSION = grpc.__version__
