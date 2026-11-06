@@ -5,7 +5,11 @@ import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from models import Delivery, OutboxEvent, ProcessedEvent
+from services.delivery_service.app.models import (
+    Delivery,
+    OutboxEvent,
+    ProcessedEvent,
+)
 
 
 DELIVERY_STATUSES = {

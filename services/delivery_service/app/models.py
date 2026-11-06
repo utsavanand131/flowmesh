@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from database import Base
+from services.delivery_service.app.database import Base
 
 
 class Delivery(Base):
