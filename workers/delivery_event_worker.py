@@ -41,7 +41,15 @@ def process_event(message_id, fields):
     event_type = fields.get("event_type")
     order_id = fields.get("order_id")
 
-    data = json.loads(fields.get("data", "{}"))
+    try:
+        data = json.loads(fields.get("data", "{}"))
+
+        if not isinstance(data, dict):
+            raise ValueError("Event data must be a JSON object")
+
+    except (json.JSONDecodeError, TypeError, ValueError) as error:
+        print("Invalid event data:", message_id, error)
+        return False
 
     print()
     print("Received delivery event")
@@ -55,7 +63,11 @@ def process_event(message_id, fields):
         "delivery.status_updated",
     }:
         print("Ignoring unsupported delivery event:", event_type)
-        return
+        return True
+
+    if not order_id:
+        print("Delivery event is missing order_id:", message_id)
+        return False
 
     db = SessionLocal()
 
@@ -64,32 +76,46 @@ def process_event(message_id, fields):
 
         if order is None:
             print(f"Order not found. Order ID: {order_id}")
-            return
+            return False
 
         print("Current order status:", order.status)
 
         if event_type == "delivery.assigned":
-            handle_delivery_assigned(
+            return handle_delivery_assigned(
                 db=db,
                 order=order,
                 order_id=order_id,
             )
 
-        elif event_type == "delivery.status_updated":
-            handle_delivery_status_updated(
+        if event_type == "delivery.status_updated":
+            return handle_delivery_status_updated(
                 db=db,
                 order=order,
                 order_id=order_id,
                 data=data,
             )
 
-    except SQLAlchemyError:
+        return True
+
+    except SQLAlchemyError as error:
         db.rollback()
+
         print(
             "Database error while processing "
-            f"delivery event for order {order_id}"
+            f"delivery event for order {order_id}: {error}"
         )
-        raise
+
+        return False
+
+    except Exception as error:
+        db.rollback()
+
+        print(
+            f"Unexpected error processing delivery event "
+            f"for order {order_id}: {error}"
+        )
+
+        return False
 
     finally:
         db.close()
@@ -100,20 +126,31 @@ def process_event(message_id, fields):
 def handle_delivery_assigned(db, order, order_id):
     if order.status == "PENDING":
         order.status = "CONFIRMED"
-        db.commit()
-        print("Order status updated:", f"{order_id} -> CONFIRMED")
 
-    elif order.status == "CONFIRMED":
+        try:
+            db.commit()
+            print("Order status updated:", f"{order_id} -> CONFIRMED")
+            return True
+
+        except SQLAlchemyError as error:
+            db.rollback()
+            print("Failed to confirm order:", error)
+            return False
+
+    if order.status == "CONFIRMED":
         print(
             "Order already confirmed. "
             "Treating event as already processed."
         )
+        return True
 
-    else:
-        print(
-            "Order is not in PENDING state. "
-            f"Current status: {order.status}"
-        )
+    print(
+        "Order is not in PENDING state. "
+        f"Current status: {order.status}"
+    )
+
+    # The event cannot currently be applied.
+    return False
 
 
 def handle_delivery_status_updated(db, order, order_id, data):
@@ -121,7 +158,7 @@ def handle_delivery_status_updated(db, order, order_id, data):
 
     if delivery_status is None:
         print("Delivery status missing from event.")
-        return
+        return False
 
     print("Delivery status:", delivery_status)
 
@@ -131,9 +168,10 @@ def handle_delivery_status_updated(db, order, order_id, data):
             "order_status_worker. Order status remains:",
             order.status,
         )
-        return
+        return True
 
-    print("Ignoring unsupported delivery status:", delivery_status)
+    print("Unsupported delivery status:", delivery_status)
+    return False
 
 
 def acknowledge_event(message_id):
@@ -178,9 +216,16 @@ def recover_pending_messages():
 
         for message_id, fields in messages:
             try:
-                process_event(message_id, fields)
-                acknowledge_event(message_id)
-                print(f"Recovered and acknowledged event {message_id}")
+                processed = process_event(message_id, fields)
+
+                if processed:
+                    acknowledge_event(message_id)
+                    print(f"Recovered and acknowledged event {message_id}")
+                else:
+                    print(
+                        f"Recovered event {message_id} failed; "
+                        "leaving it pending"
+                    )
 
             except Exception as error:
                 print(
@@ -195,7 +240,6 @@ def recover_pending_messages():
 def main():
     ensure_consumer_group()
 
-    # Recover eligible pending events when the worker starts.
     recover_pending_messages()
     last_recovery_time = time.monotonic()
 
@@ -215,12 +259,23 @@ def main():
             for _, stream_messages in messages:
                 for message_id, fields in stream_messages:
                     try:
-                        process_event(message_id, fields)
-                        acknowledge_event(message_id)
-                        print("Event acknowledged:", message_id)
+                        processed = process_event(message_id, fields)
+
+                        if processed:
+                            acknowledge_event(message_id)
+                            print("Event acknowledged:", message_id)
+                        else:
+                            print(
+                                "Event processing failed; "
+                                "leaving pending:",
+                                message_id,
+                            )
 
                     except Exception as error:
-                        print("Event processing failed:", error)
+                        print(
+                            "Event processing failed; "
+                            f"leaving pending: {message_id}: {error}"
+                        )
 
             now = time.monotonic()
 
@@ -231,8 +286,12 @@ def main():
         except redis.exceptions.TimeoutError:
             continue
 
-        except Exception as error:
+        except redis.exceptions.RedisError as error:
             print("Redis worker error:", error)
+            time.sleep(2)
+
+        except Exception as error:
+            print("Unexpected worker error:", error)
             time.sleep(2)
 
         time.sleep(0.1)

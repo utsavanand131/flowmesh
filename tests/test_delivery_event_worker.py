@@ -79,12 +79,13 @@ def test_ensure_consumer_group_reraises_other_errors(mock_redis):
 
 
 def test_delivery_assigned_confirms_pending_order(mock_db, order):
-    worker.handle_delivery_assigned(
+    result = worker.handle_delivery_assigned(
         db=mock_db,
         order=order,
         order_id="order_123",
     )
 
+    assert result is True
     assert order.status == "CONFIRMED"
     mock_db.commit.assert_called_once()
 
@@ -94,12 +95,13 @@ def test_delivery_assigned_does_not_commit_confirmed_order(
 ):
     order.status = "CONFIRMED"
 
-    worker.handle_delivery_assigned(
+    result = worker.handle_delivery_assigned(
         db=mock_db,
         order=order,
         order_id="order_123",
     )
 
+    assert result is True
     assert order.status == "CONFIRMED"
     mock_db.commit.assert_not_called()
 
@@ -108,19 +110,37 @@ def test_delivery_assigned_does_not_commit_confirmed_order(
     "status",
     ["PROCESSING", "DELIVERED", "CANCELLED"],
 )
-def test_delivery_assigned_ignores_other_order_statuses(
+def test_delivery_assigned_rejects_other_order_statuses(
     mock_db, order, status
 ):
     order.status = status
 
-    worker.handle_delivery_assigned(
+    result = worker.handle_delivery_assigned(
         db=mock_db,
         order=order,
         order_id="order_123",
     )
 
+    assert result is False
     assert order.status == status
     mock_db.commit.assert_not_called()
+
+
+def test_delivery_assigned_database_error_rolls_back(
+    mock_db, order
+):
+    mock_db.commit.side_effect = SQLAlchemyError(
+        "Database commit failed"
+    )
+
+    result = worker.handle_delivery_assigned(
+        db=mock_db,
+        order=order,
+        order_id="order_123",
+    )
+
+    assert result is False
+    mock_db.rollback.assert_called_once()
 
 
 # -------------------------
@@ -137,40 +157,43 @@ def test_delivery_status_updated_does_not_change_order_status(
 ):
     original_status = order.status
 
-    worker.handle_delivery_status_updated(
+    result = worker.handle_delivery_status_updated(
         db=mock_db,
         order=order,
         order_id="order_123",
         data={"status": status},
     )
 
+    assert result is True
     assert order.status == original_status
     mock_db.commit.assert_not_called()
 
 
-def test_delivery_status_updated_ignores_missing_status(
+def test_delivery_status_updated_rejects_missing_status(
     mock_db, order
 ):
-    worker.handle_delivery_status_updated(
+    result = worker.handle_delivery_status_updated(
         db=mock_db,
         order=order,
         order_id="order_123",
         data={},
     )
 
+    assert result is False
     mock_db.commit.assert_not_called()
 
 
-def test_delivery_status_updated_ignores_unknown_status(
+def test_delivery_status_updated_rejects_unknown_status(
     mock_db, order
 ):
-    worker.handle_delivery_status_updated(
+    result = worker.handle_delivery_status_updated(
         db=mock_db,
         order=order,
         order_id="order_123",
         data={"status": "UNKNOWN"},
     )
 
+    assert result is False
     assert order.status == "PENDING"
     mock_db.commit.assert_not_called()
 
@@ -185,7 +208,7 @@ def test_process_event_confirms_order_and_closes_session(
 ):
     mock_db.get.return_value = order
 
-    worker.process_event(
+    result = worker.process_event(
         "message_1",
         {
             "event_type": "delivery.assigned",
@@ -194,6 +217,7 @@ def test_process_event_confirms_order_and_closes_session(
         },
     )
 
+    assert result is True
     assert order.status == "CONFIRMED"
     mock_db.commit.assert_called_once()
     mock_db.close.assert_called_once()
@@ -204,7 +228,7 @@ def test_process_event_delivery_status_does_not_update_order(
 ):
     mock_db.get.return_value = order
 
-    worker.process_event(
+    result = worker.process_event(
         "message_2",
         {
             "event_type": "delivery.status_updated",
@@ -213,6 +237,7 @@ def test_process_event_delivery_status_does_not_update_order(
         },
     )
 
+    assert result is True
     assert order.status == "PENDING"
     mock_db.commit.assert_not_called()
     mock_db.close.assert_called_once()
@@ -220,7 +245,7 @@ def test_process_event_delivery_status_does_not_update_order(
 
 def test_process_event_ignores_unsupported_event_type():
     with patch.object(worker, "SessionLocal") as session_factory:
-        worker.process_event(
+        result = worker.process_event(
             "message_3",
             {
                 "event_type": "order.created",
@@ -229,13 +254,14 @@ def test_process_event_ignores_unsupported_event_type():
             },
         )
 
+        assert result is True
         session_factory.assert_not_called()
 
 
-def test_process_event_missing_order_closes_session(mock_db):
+def test_process_event_missing_order_returns_false(mock_db):
     mock_db.get.return_value = None
 
-    worker.process_event(
+    result = worker.process_event(
         "message_4",
         {
             "event_type": "delivery.assigned",
@@ -244,41 +270,83 @@ def test_process_event_missing_order_closes_session(mock_db):
         },
     )
 
+    assert result is False
     mock_db.commit.assert_not_called()
     mock_db.close.assert_called_once()
 
 
+def test_process_event_missing_order_id_returns_false():
+    result = worker.process_event(
+        "message_missing_order_id",
+        {
+            "event_type": "delivery.assigned",
+            "order_id": "",
+            "data": "{}",
+        },
+    )
+
+    assert result is False
+
+
 def test_process_event_database_error_rolls_back_and_closes(
-    mock_db
+    mock_db,
 ):
     mock_db.get.side_effect = SQLAlchemyError("database failure")
 
-    with pytest.raises(SQLAlchemyError, match="database failure"):
-        worker.process_event(
-            "message_5",
-            {
-                "event_type": "delivery.assigned",
-                "order_id": "order_123",
-                "data": "{}",
-            },
-        )
+    result = worker.process_event(
+        "message_5",
+        {
+            "event_type": "delivery.assigned",
+            "order_id": "order_123",
+            "data": "{}",
+        },
+    )
 
+    assert result is False
     mock_db.rollback.assert_called_once()
     mock_db.close.assert_called_once()
 
 
-def test_process_event_invalid_json_does_not_open_session():
-    with patch.object(worker, "SessionLocal") as session_factory:
-        with pytest.raises(json.JSONDecodeError):
-            worker.process_event(
-                "message_6",
-                {
-                    "event_type": "delivery.assigned",
-                    "order_id": "order_123",
-                    "data": "{invalid-json",
-                },
-            )
+def test_process_event_unexpected_error_rolls_back_and_closes(
+    mock_db,
+):
+    mock_db.get.side_effect = RuntimeError("unexpected failure")
 
+    result = worker.process_event(
+        "message_5b",
+        {
+            "event_type": "delivery.assigned",
+            "order_id": "order_123",
+            "data": "{}",
+        },
+    )
+
+    assert result is False
+    mock_db.rollback.assert_called_once()
+    mock_db.close.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "bad_data",
+    [
+        "{invalid-json",
+        None,
+        "[]",
+        '"not-an-object"',
+    ],
+)
+def test_process_event_invalid_data_returns_false(bad_data):
+    with patch.object(worker, "SessionLocal") as session_factory:
+        result = worker.process_event(
+            "message_6",
+            {
+                "event_type": "delivery.assigned",
+                "order_id": "order_123",
+                "data": bad_data,
+            },
+        )
+
+        assert result is False
         session_factory.assert_not_called()
 
 
@@ -307,7 +375,11 @@ def test_main_acknowledges_successful_event(mock_redis):
     with (
         patch.object(worker, "ensure_consumer_group"),
         patch.object(worker, "recover_pending_messages"),
-        patch.object(worker, "process_event") as process_event,
+        patch.object(
+            worker,
+            "process_event",
+            return_value=True,
+        ) as process_event,
         patch.object(worker.time, "sleep"),
         pytest.raises(KeyboardInterrupt),
     ):
@@ -325,7 +397,40 @@ def test_main_acknowledges_successful_event(mock_redis):
     )
 
 
-def test_main_does_not_acknowledge_failed_event(mock_redis):
+def test_main_does_not_acknowledge_false_result(mock_redis):
+    event_fields = {
+        "event_type": "delivery.assigned",
+        "order_id": "missing_order",
+        "data": "{}",
+    }
+
+    mock_redis.xreadgroup.side_effect = [
+        [
+            (
+                worker.DELIVERY_EVENTS_STREAM,
+                [(b"message_2", event_fields)],
+            )
+        ],
+        KeyboardInterrupt,
+    ]
+
+    with (
+        patch.object(worker, "ensure_consumer_group"),
+        patch.object(worker, "recover_pending_messages"),
+        patch.object(
+            worker,
+            "process_event",
+            return_value=False,
+        ),
+        patch.object(worker.time, "sleep"),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        worker.main()
+
+    mock_redis.xack.assert_not_called()
+
+
+def test_main_does_not_acknowledge_processing_exception(mock_redis):
     event_fields = {
         "event_type": "delivery.assigned",
         "order_id": "order_123",
@@ -336,7 +441,7 @@ def test_main_does_not_acknowledge_failed_event(mock_redis):
         [
             (
                 worker.DELIVERY_EVENTS_STREAM,
-                [(b"message_2", event_fields)],
+                [(b"message_3", event_fields)],
             )
         ],
         KeyboardInterrupt,
@@ -410,7 +515,11 @@ def test_recover_pending_messages_acknowledges_success(mock_redis):
         [],
     )
 
-    with patch.object(worker, "process_event") as process_event:
+    with patch.object(
+        worker,
+        "process_event",
+        return_value=True,
+    ) as process_event:
         worker.recover_pending_messages()
 
     mock_redis.xautoclaim.assert_called_once_with(
@@ -434,7 +543,32 @@ def test_recover_pending_messages_acknowledges_success(mock_redis):
     )
 
 
-def test_recover_pending_messages_does_not_acknowledge_failure(
+def test_recover_pending_messages_does_not_acknowledge_false_result(
+    mock_redis,
+):
+    event_fields = {
+        "event_type": "delivery.assigned",
+        "order_id": "missing_order",
+        "data": "{}",
+    }
+
+    mock_redis.xautoclaim.return_value = (
+        "0-0",
+        [("message_11", event_fields)],
+        [],
+    )
+
+    with patch.object(
+        worker,
+        "process_event",
+        return_value=False,
+    ):
+        worker.recover_pending_messages()
+
+    mock_redis.xack.assert_not_called()
+
+
+def test_recover_pending_messages_does_not_acknowledge_exception(
     mock_redis,
 ):
     event_fields = {
@@ -445,7 +579,7 @@ def test_recover_pending_messages_does_not_acknowledge_failure(
 
     mock_redis.xautoclaim.return_value = (
         "0-0",
-        [("message_11", event_fields)],
+        [("message_12", event_fields)],
         [],
     )
 
@@ -464,7 +598,6 @@ def test_recover_pending_messages_handles_redis_error(mock_redis):
         "Redis unavailable"
     )
 
-    # Recovery errors should not crash the worker.
     worker.recover_pending_messages()
 
     mock_redis.xautoclaim.assert_called_once()
@@ -473,7 +606,6 @@ def test_recover_pending_messages_handles_redis_error(mock_redis):
 def test_recover_pending_messages_handles_invalid_response(mock_redis):
     mock_redis.xautoclaim.return_value = ()
 
-    # An unexpected response should not crash the worker.
     worker.recover_pending_messages()
 
     mock_redis.xack.assert_not_called()
@@ -497,17 +629,21 @@ def test_recover_pending_messages_processes_multiple_batches(
     mock_redis.xautoclaim.side_effect = [
         (
             "next_cursor",
-            [("message_12", first_fields)],
+            [("message_13", first_fields)],
             [],
         ),
         (
             "0-0",
-            [("message_13", second_fields)],
+            [("message_14", second_fields)],
             [],
         ),
     ]
 
-    with patch.object(worker, "process_event") as process_event:
+    with patch.object(
+        worker,
+        "process_event",
+        return_value=True,
+    ) as process_event:
         worker.recover_pending_messages()
 
     assert process_event.call_count == 2
