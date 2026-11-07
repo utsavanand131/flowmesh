@@ -11,6 +11,7 @@ from workers import order_event_worker as worker
 # ensure_consumer_group tests
 # -------------------------
 
+
 @patch.object(worker, "redis_client")
 def test_ensure_consumer_group_creates_group(mock_redis):
     worker.ensure_consumer_group()
@@ -47,6 +48,7 @@ def test_ensure_consumer_group_reraises_other_errors(mock_redis):
 # -------------------------
 # process_event tests
 # -------------------------
+
 
 @patch.object(worker, "create_delivery")
 def test_process_order_created_event_creates_delivery(mock_create_delivery):
@@ -165,13 +167,15 @@ def test_process_event_rejects_invalid_json():
         "data": "{invalid-json",
     }
 
-    with pytest.raises(json.JSONDecodeError):
-        worker.process_event("message_6", fields)
+    result = worker.process_event("message_6", fields)
+
+    assert result is False
 
 
 # -------------------------
 # main loop acknowledgment tests
 # -------------------------
+
 
 @patch.object(worker.time, "sleep")
 @patch.object(worker, "process_event")
@@ -221,6 +225,7 @@ def test_main_acknowledges_successfully_processed_event(
 
 
 @patch.object(worker.time, "sleep")
+@patch.object(worker, "handle_processing_failure")
 @patch.object(worker, "process_event")
 @patch.object(worker, "ensure_consumer_group")
 @patch.object(worker, "redis_client")
@@ -228,6 +233,7 @@ def test_main_does_not_acknowledge_failed_event(
     mock_redis,
     mock_ensure_group,
     mock_process_event,
+    mock_handle_failure,
     mock_sleep,
 ):
     mock_process_event.side_effect = RuntimeError(
@@ -262,12 +268,14 @@ def test_main_does_not_acknowledge_failed_event(
         event_fields,
     )
 
+    mock_handle_failure.assert_called_once()
     mock_redis.xack.assert_not_called()
 
 
 # -------------------------
 # pending-message recovery tests
 # -------------------------
+
 
 @patch.object(worker, "acknowledge_event")
 @patch.object(worker, "process_event")
@@ -309,13 +317,13 @@ def test_recover_pending_messages_processes_and_acknowledges_event(
     mock_acknowledge.assert_called_once_with("message_10")
 
 
-@patch.object(worker, "acknowledge_event")
+@patch.object(worker, "handle_processing_failure")
 @patch.object(worker, "process_event")
 @patch.object(worker, "redis_client")
 def test_recover_pending_messages_does_not_acknowledge_failed_event(
     mock_redis,
     mock_process_event,
-    mock_acknowledge,
+    mock_handle_failure,
 ):
     mock_process_event.return_value = False
 
@@ -339,16 +347,17 @@ def test_recover_pending_messages_does_not_acknowledge_failed_event(
         event_fields,
     )
 
-    mock_acknowledge.assert_not_called()
+    mock_handle_failure.assert_called_once()
+    mock_redis.xack.assert_not_called()
 
 
-@patch.object(worker, "acknowledge_event")
+@patch.object(worker, "handle_processing_failure")
 @patch.object(worker, "process_event")
 @patch.object(worker, "redis_client")
 def test_recover_pending_messages_leaves_exception_event_pending(
     mock_redis,
     mock_process_event,
-    mock_acknowledge,
+    mock_handle_failure,
 ):
     mock_process_event.side_effect = RuntimeError(
         "Delivery service unavailable"
@@ -374,7 +383,8 @@ def test_recover_pending_messages_leaves_exception_event_pending(
         event_fields,
     )
 
-    mock_acknowledge.assert_not_called()
+    mock_handle_failure.assert_called_once()
+    mock_redis.xack.assert_not_called()
 
 
 @patch.object(worker, "redis_client")
@@ -388,3 +398,116 @@ def test_recover_pending_messages_handles_redis_error(mock_redis):
     worker.recover_pending_messages()
 
     mock_redis.xautoclaim.assert_called_once()
+
+
+# -------------------------
+# process_message tests
+# -------------------------
+
+
+@patch.object(worker, "handle_processing_failure")
+@patch.object(worker, "process_event")
+@patch.object(worker, "acknowledge_event")
+def test_process_message_acknowledges_success(
+    mock_acknowledge,
+    mock_process_event,
+    mock_handle_failure,
+):
+    mock_process_event.return_value = True
+
+    worker.process_message(
+        "message_123",
+        {"event_type": "order.created"},
+    )
+
+    mock_acknowledge.assert_called_once_with("message_123")
+    mock_handle_failure.assert_not_called()
+
+
+@patch.object(worker, "handle_processing_failure")
+@patch.object(worker, "process_event")
+@patch.object(worker, "acknowledge_event")
+def test_process_message_retries_failed_event(
+    mock_acknowledge,
+    mock_process_event,
+    mock_handle_failure,
+):
+    mock_process_event.return_value = False
+
+    fields = {
+        "event_id": "event_123",
+        "event_type": "order.created",
+        "order_id": "order_123",
+        "data": "{}",
+    }
+
+    worker.process_message("message_123", fields)
+
+    mock_acknowledge.assert_not_called()
+
+    mock_handle_failure.assert_called_once_with(
+        "message_123",
+        fields,
+        "Event processing returned False",
+    )
+
+
+@patch.object(worker, "handle_processing_failure")
+@patch.object(worker, "process_event")
+@patch.object(worker, "acknowledge_event")
+def test_process_message_handles_processing_exception(
+    mock_acknowledge,
+    mock_process_event,
+    mock_handle_failure,
+):
+    mock_process_event.side_effect = RuntimeError(
+        "Delivery unavailable"
+    )
+
+    fields = {
+        "event_id": "event_123",
+        "event_type": "order.created",
+        "order_id": "order_123",
+        "data": "{}",
+    }
+
+    worker.process_message("message_123", fields)
+
+    mock_acknowledge.assert_not_called()
+
+    mock_handle_failure.assert_called_once()
+
+    call_args = mock_handle_failure.call_args
+
+    assert call_args.args[0] == "message_123"
+    assert call_args.args[1] == fields
+    assert isinstance(call_args.args[2], RuntimeError)
+    assert str(call_args.args[2]) == "Delivery unavailable"
+
+
+@patch.object(worker, "handle_processing_failure")
+@patch.object(worker, "process_event")
+@patch.object(worker, "acknowledge_event")
+def test_process_message_does_not_ack_failed_dead_letter_publication(
+    mock_acknowledge,
+    mock_process_event,
+    mock_handle_failure,
+):
+    mock_process_event.return_value = False
+
+    fields = {
+        "event_id": "event_123",
+        "event_type": "order.created",
+        "order_id": "order_123",
+        "data": "{}",
+    }
+
+    worker.process_message("message_123", fields)
+
+    mock_acknowledge.assert_not_called()
+
+    mock_handle_failure.assert_called_once_with(
+        "message_123",
+        fields,
+        "Event processing returned False",
+    )

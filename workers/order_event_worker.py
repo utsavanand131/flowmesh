@@ -4,6 +4,7 @@ import time
 
 import redis
 
+from lib.event_reliability import handle_failed_message
 from lib.events import ORDER_EVENTS_STREAM
 from lib.redis import redis_client
 from workers.delivery_client import create_delivery
@@ -43,8 +44,15 @@ def process_event(message_id, fields=None):
     order_id = fields.get("order_id")
     event_id = fields.get("event_id")
 
-    # Invalid JSON raises JSONDecodeError; the message must not be ACKed.
-    data = json.loads(fields.get("data", "{}"))
+    try:
+        data = json.loads(fields.get("data", "{}"))
+
+        if not isinstance(data, dict):
+            raise ValueError("Event data must be a JSON object")
+
+    except (json.JSONDecodeError, TypeError, ValueError) as error:
+        print(f"Invalid event data for {message_id}: {error}")
+        return False
 
     print(f"Received event: {event_type}")
     print(f"Message ID: {message_id}")
@@ -61,8 +69,6 @@ def process_event(message_id, fields=None):
             print("Order event is missing event_id")
             return False
 
-        # Let delivery exceptions propagate so the caller can leave
-        # the message pending for retry.
         result = create_delivery(
             order_id=order_id,
             event_id=event_id,
@@ -79,7 +85,6 @@ def process_event(message_id, fields=None):
         print(f"Delivery processed for order {order_id}")
         return True
 
-    # Unsupported events are intentionally ignored and acknowledged.
     print(f"Ignoring unsupported event type: {event_type}")
     return True
 
@@ -91,6 +96,54 @@ def acknowledge_event(message_id):
         CONSUMER_GROUP,
         message_id,
     )
+
+
+def handle_processing_failure(message_id, fields, error):
+    """Apply the shared retry and dead-letter policy to a failed event."""
+    try:
+        result = handle_failed_message(
+            redis_client=redis_client,
+            stream=ORDER_EVENTS_STREAM,
+            group=CONSUMER_GROUP,
+            message_id=message_id,
+            fields=fields,
+            error=str(error),
+        )
+
+        if result == "dead_lettered":
+            print(f"Event {message_id} moved to dead-letter stream.")
+
+    except redis.exceptions.RedisError as redis_error:
+        print(
+            f"Could not apply retry policy to event "
+            f"{message_id}: {redis_error}"
+        )
+
+
+def process_message(message_id, fields):
+    """Process one message and apply ACK, retry, or dead-letter behavior."""
+    try:
+        processed = process_event(message_id, fields)
+
+        if processed:
+            acknowledge_event(message_id)
+            print(f"Acknowledged event {message_id}")
+            return
+
+        handle_processing_failure(
+            message_id,
+            fields,
+            "Event processing returned False",
+        )
+
+    except Exception as error:
+        print(f"Error processing event {message_id}: {error}")
+
+        handle_processing_failure(
+            message_id,
+            fields,
+            error,
+        )
 
 
 def recover_pending_messages():
@@ -110,7 +163,6 @@ def recover_pending_messages():
                 count=CLAIM_BATCH_SIZE,
             )
 
-            # redis-py returns (next_start_id, messages, deleted_ids).
             next_id, messages, _deleted_ids = response
 
         except redis.exceptions.RedisError as error:
@@ -122,22 +174,7 @@ def recover_pending_messages():
             return
 
         for message_id, fields in messages:
-            try:
-                processed = process_event(message_id, fields)
-
-                if processed:
-                    acknowledge_event(message_id)
-                    print(f"Recovered and acknowledged event {message_id}")
-                else:
-                    print(
-                        f"Recovered event {message_id} failed; "
-                        "leaving it pending"
-                    )
-
-            except Exception as error:
-                print(
-                    f"Error processing recovered event {message_id}: {error}"
-                )
+            process_message(message_id, fields)
 
         if next_id == "0-0":
             break
@@ -147,7 +184,6 @@ def main():
     """Consume new events and periodically recover pending messages."""
     ensure_consumer_group()
 
-    # Retry eligible pending messages when the worker starts.
     recover_pending_messages()
     last_recovery_time = time.monotonic()
 
@@ -165,21 +201,7 @@ def main():
 
             for _stream_name, messages in response:
                 for message_id, fields in messages:
-                    try:
-                        processed = process_event(message_id, fields)
-
-                        if processed:
-                            acknowledge_event(message_id)
-                            print(f"Acknowledged event {message_id}")
-                        else:
-                            print(
-                                f"Event {message_id} failed; "
-                                "leaving it pending for recovery"
-                            )
-
-                    except Exception as error:
-                        # Do not ACK events that failed processing.
-                        print(f"Error processing event {message_id}: {error}")
+                    process_message(message_id, fields)
 
             now = time.monotonic()
 
@@ -192,6 +214,10 @@ def main():
 
         except redis.exceptions.RedisError as error:
             print(f"Redis error in order event worker: {error}")
+            time.sleep(2)
+
+        except Exception as error:
+            print(f"Unexpected order event worker error: {error}")
             time.sleep(2)
 
 
