@@ -5,6 +5,7 @@ import time
 import redis
 
 from lib.events import DELIVERY_EVENTS_STREAM
+from lib.event_reliability import handle_failed_message
 from lib.redis import redis_client
 from services.order_service.app.database import SessionLocal
 from services.order_service.app.order_service import OrderManager
@@ -131,11 +132,72 @@ def acknowledge_event(message_id):
         print("Event was not acknowledged:", message_id)
 
 
+def handle_processing_failure(message_id, fields, error):
+    try:
+        result = handle_failed_message(
+            redis_client=redis_client,
+            stream=DELIVERY_EVENTS_STREAM,
+            group=CONSUMER_GROUP,
+            message_id=message_id,
+            fields=fields,
+            error=error,
+        )
+
+        if result == "retry":
+            print("Order status event will be retried:", message_id)
+
+        elif result == "dead_lettered":
+            print("Order status event moved to dead-letter stream:", message_id)
+
+        return result
+
+    except redis.exceptions.RedisError as redis_error:
+        print(
+            "Failed to handle order status event failure:",
+            message_id,
+            redis_error,
+        )
+        return "pending"
+
+
+def process_message(message_id, fields):
+    try:
+        processed = process_event(message_id, fields)
+
+    except Exception as error:
+        print(
+            "Order status event processing failed:",
+            message_id,
+            error,
+        )
+        handle_processing_failure(message_id, fields, error)
+        return
+
+    if not processed:
+        handle_processing_failure(
+            message_id,
+            fields,
+            "Order status event processing returned False",
+        )
+        return
+
+    try:
+        acknowledge_event(message_id)
+
+    except redis.exceptions.RedisError as error:
+        print(
+            "Failed to acknowledge order status event; "
+            "message remains pending:",
+            message_id,
+            error,
+        )
+
+
 def recover_pending_messages():
     print(
-    f"[{time.strftime('%H:%M:%S')}] "
-    "Checking for stale pending delivery events..."
-)
+        f"[{time.strftime('%H:%M:%S')}] "
+        "Checking for stale pending delivery events..."
+    )
 
     start_id = "0-0"
 
@@ -159,23 +221,7 @@ def recover_pending_messages():
                 )
 
             for message_id, fields in claimed_messages:
-                try:
-                    processed = process_event(message_id, fields)
-
-                    if processed:
-                        acknowledge_event(message_id)
-                    else:
-                        print(
-                            "Claimed event remains pending:",
-                            message_id,
-                        )
-
-                except Exception as error:
-                    print(
-                        "Claimed event processing failed:",
-                        message_id,
-                        error,
-                    )
+                process_message(message_id, fields)
 
             # Redis returns 0-0 when the scan is complete.
             if next_id == "0-0":
@@ -211,23 +257,7 @@ def main():
 
             for _, stream_messages in messages:
                 for message_id, fields in stream_messages:
-                    try:
-                        processed = process_event(message_id, fields)
-
-                        if processed:
-                            acknowledge_event(message_id)
-                        else:
-                            print(
-                                "Event left pending for retry:",
-                                message_id,
-                            )
-
-                    except Exception as error:
-                        print(
-                            "Event processing failed:",
-                            message_id,
-                            error,
-                        )
+                    process_message(message_id, fields)
 
         except redis.exceptions.TimeoutError:
             pass

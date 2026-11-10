@@ -345,3 +345,151 @@ def test_recovery_reraises_redis_errors(mock_redis):
 
     with pytest.raises(redis.exceptions.RedisError, match="Redis unavailable"):
         worker.recover_pending_messages()
+
+# Retry and dead-letter tests
+
+@patch.object(worker, "handle_failed_message", return_value="retry")
+@patch.object(worker, "redis_client")
+def test_handle_processing_failure_delegates_retry_policy(
+    mock_redis,
+    mock_handle,
+):
+    fields = delivery_event()
+
+    result = worker.handle_processing_failure(
+        "message_20",
+        fields,
+        "Database failure",
+    )
+
+    assert result == "retry"
+    mock_handle.assert_called_once_with(
+        redis_client=mock_redis,
+        stream=worker.DELIVERY_EVENTS_STREAM,
+        group=worker.CONSUMER_GROUP,
+        message_id="message_20",
+        fields=fields,
+        error="Database failure",
+    )
+
+
+@patch.object(worker, "handle_failed_message", return_value="dead_lettered")
+@patch.object(worker, "redis_client")
+def test_handle_processing_failure_handles_dead_letter_result(
+    mock_redis,
+    mock_handle,
+):
+    result = worker.handle_processing_failure(
+        "message_21",
+        delivery_event(),
+        "Repeated database failure",
+    )
+
+    assert result == "dead_lettered"
+    mock_handle.assert_called_once()
+
+
+@patch.object(worker, "handle_failed_message")
+@patch.object(worker, "redis_client")
+def test_handle_processing_failure_handles_redis_error(
+    mock_redis,
+    mock_handle,
+):
+    mock_handle.side_effect = redis.exceptions.RedisError(
+        "Redis unavailable"
+    )
+
+    result = worker.handle_processing_failure(
+        "message_22",
+        delivery_event(),
+        "Database failure",
+    )
+
+    assert result == "pending"
+
+
+@patch.object(worker, "acknowledge_event")
+@patch.object(worker, "process_event", return_value=True)
+def test_process_message_acknowledges_successful_event(
+    mock_process,
+    mock_acknowledge,
+):
+    fields = delivery_event()
+
+    worker.process_message("message_23", fields)
+
+    mock_process.assert_called_once_with("message_23", fields)
+    mock_acknowledge.assert_called_once_with("message_23")
+
+
+@patch.object(worker, "handle_processing_failure")
+@patch.object(worker, "acknowledge_event")
+@patch.object(worker, "process_event", return_value=False)
+def test_process_message_retries_failed_event(
+    mock_process,
+    mock_acknowledge,
+    mock_failure,
+):
+    fields = delivery_event()
+
+    worker.process_message("message_24", fields)
+
+    mock_failure.assert_called_once_with(
+        "message_24",
+        fields,
+        "Order status event processing returned False",
+    )
+    mock_acknowledge.assert_not_called()
+
+
+@patch.object(worker, "handle_processing_failure")
+@patch.object(worker, "process_event")
+def test_process_message_handles_processing_exception(
+    mock_process,
+    mock_failure,
+):
+    fields = delivery_event()
+    mock_process.side_effect = RuntimeError("Unexpected failure")
+
+    worker.process_message("message_25", fields)
+
+    mock_failure.assert_called_once()
+    assert mock_failure.call_args.args[0] == "message_25"
+    assert mock_failure.call_args.args[1] == fields
+    assert isinstance(mock_failure.call_args.args[2], RuntimeError)
+
+
+@patch.object(worker, "handle_processing_failure")
+@patch.object(worker, "acknowledge_event")
+@patch.object(worker, "process_event", return_value=False)
+def test_process_message_does_not_acknowledge_failed_event(
+    mock_process,
+    mock_acknowledge,
+    mock_failure,
+):
+    worker.process_message(
+        "message_26",
+        delivery_event(),
+    )
+
+    mock_acknowledge.assert_not_called()
+    mock_failure.assert_called_once()
+
+
+@patch.object(worker, "acknowledge_event")
+@patch.object(worker, "process_event", return_value=True)
+def test_process_message_leaves_event_pending_when_ack_fails(
+    mock_process,
+    mock_acknowledge,
+):
+    mock_acknowledge.side_effect = redis.exceptions.RedisError(
+        "Redis unavailable"
+    )
+
+    # The worker handles the Redis error without crashing.
+    worker.process_message(
+        "message_27",
+        delivery_event(),
+    )
+
+    mock_acknowledge.assert_called_once_with("message_27")
