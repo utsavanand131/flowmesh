@@ -1,5 +1,7 @@
 
 import json
+import signal
+import threading
 import time
 
 import redis
@@ -16,6 +18,21 @@ CONSUMER_NAME = "order-event-worker-1"
 PENDING_IDLE_THRESHOLD_MS = 60_000
 CLAIM_BATCH_SIZE = 10
 RECOVERY_INTERVAL_SECONDS = 30
+
+# Shared shutdown signal for the worker.
+shutdown_event = threading.Event()
+
+
+def request_shutdown(signum, frame):
+    """Request a graceful worker shutdown."""
+    print(f"Shutdown signal received: {signum}")
+    shutdown_event.set()
+
+
+def install_signal_handlers():
+    """Register handlers for normal termination signals."""
+    signal.signal(signal.SIGINT, request_shutdown)
+    signal.signal(signal.SIGTERM, request_shutdown)
 
 
 def ensure_consumer_group():
@@ -181,44 +198,68 @@ def recover_pending_messages():
 
 
 def main():
-    """Consume new events and periodically recover pending messages."""
+    """Consume events and shut down gracefully when requested."""
+    install_signal_handlers()
+
+    # Do not clear shutdown_event here.
+    # A previously requested shutdown must be respected.
+    if shutdown_event.is_set():
+        print("Shutdown already requested. Worker will not start.")
+        return
+
     ensure_consumer_group()
 
-    recover_pending_messages()
+    if not shutdown_event.is_set():
+        recover_pending_messages()
+
     last_recovery_time = time.monotonic()
 
     print("Order event worker is running...")
+    print("Press Ctrl+C to shut down gracefully.")
 
-    while True:
-        try:
-            response = redis_client.xreadgroup(
-                groupname=CONSUMER_GROUP,
-                consumername=CONSUMER_NAME,
-                streams={ORDER_EVENTS_STREAM: ">"},
-                count=10,
-                block=5000,
-            )
+    try:
+        while not shutdown_event.is_set():
+            try:
+                response = redis_client.xreadgroup(
+                    groupname=CONSUMER_GROUP,
+                    consumername=CONSUMER_NAME,
+                    streams={ORDER_EVENTS_STREAM: ">"},
+                    count=10,
+                    block=5000,
+                )
 
-            for _stream_name, messages in response:
-                for message_id, fields in messages:
-                    process_message(message_id, fields)
+                # Finish every message already fetched, even if a shutdown
+                # signal arrives while this batch is being processed.
+                for _stream_name, messages in response:
+                    for message_id, fields in messages:
+                        process_message(message_id, fields)
 
-            now = time.monotonic()
+                if shutdown_event.is_set():
+                    break
 
-            if now - last_recovery_time >= RECOVERY_INTERVAL_SECONDS:
-                recover_pending_messages()
-                last_recovery_time = now
+                now = time.monotonic()
 
-        except redis.exceptions.TimeoutError:
-            print("Redis read timed out; retrying...")
+                if now - last_recovery_time >= RECOVERY_INTERVAL_SECONDS:
+                    recover_pending_messages()
+                    last_recovery_time = now
 
-        except redis.exceptions.RedisError as error:
-            print(f"Redis error in order event worker: {error}")
-            time.sleep(2)
+            except redis.exceptions.TimeoutError:
+                print("Redis read timed out; retrying...")
 
-        except Exception as error:
-            print(f"Unexpected order event worker error: {error}")
-            time.sleep(2)
+            except redis.exceptions.RedisError as error:
+                print(f"Redis error in order event worker: {error}")
+
+                if not shutdown_event.is_set():
+                    time.sleep(2)
+
+            except Exception as error:
+                print(f"Unexpected order event worker error: {error}")
+
+                if not shutdown_event.is_set():
+                    time.sleep(2)
+
+    finally:
+        print("Order event worker shut down gracefully.")
 
 
 if __name__ == "__main__":
