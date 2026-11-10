@@ -654,3 +654,190 @@ def test_recover_pending_messages_processes_multiple_batches(
         mock_redis.xautoclaim.call_args_list[1].kwargs["start_id"]
         == "next_cursor"
     )
+
+# Retry and dead-letter tests
+
+@patch.object(worker, "handle_failed_message")
+def test_handle_processing_failure_delegates_retry_policy(
+    mock_handle_failed,
+):
+    mock_handle_failed.return_value = "retry"
+
+    fields = {
+        "event_id": "event_123",
+        "event_type": "delivery.assigned",
+        "order_id": "order_123",
+        "data": "{}",
+    }
+
+    worker.handle_processing_failure(
+        "message_123",
+        fields,
+        "Temporary processing failure",
+    )
+
+    mock_handle_failed.assert_called_once_with(
+        redis_client=worker.redis_client,
+        stream=worker.DELIVERY_EVENTS_STREAM,
+        group=worker.CONSUMER_GROUP,
+        message_id="message_123",
+        fields=fields,
+        error="Temporary processing failure",
+    )
+
+
+@patch.object(worker, "handle_failed_message")
+def test_handle_processing_failure_handles_dead_letter_result(
+    mock_handle_failed,
+):
+    mock_handle_failed.return_value = "dead_lettered"
+
+    fields = {"event_id": "event_123"}
+
+    worker.handle_processing_failure(
+        "message_123",
+        fields,
+        "Repeated processing failure",
+    )
+
+    mock_handle_failed.assert_called_once()
+
+
+@patch.object(worker, "handle_failed_message")
+def test_handle_processing_failure_handles_redis_error(
+    mock_handle_failed,
+):
+    mock_handle_failed.side_effect = redis.exceptions.RedisError(
+        "Redis unavailable"
+    )
+
+    worker.handle_processing_failure(
+        "message_123",
+        {"event_id": "event_123"},
+        "Processing failed",
+    )
+
+    mock_handle_failed.assert_called_once()
+
+
+@patch.object(worker, "handle_processing_failure")
+@patch.object(worker, "process_event")
+@patch.object(worker, "acknowledge_event")
+def test_process_message_acknowledges_successful_event(
+    mock_acknowledge,
+    mock_process_event,
+    mock_handle_failure,
+):
+    mock_process_event.return_value = True
+
+    worker.process_message(
+        "message_123",
+        {"event_id": "event_123"},
+    )
+
+    mock_acknowledge.assert_called_once_with("message_123")
+    mock_handle_failure.assert_not_called()
+
+
+@patch.object(worker, "handle_processing_failure")
+@patch.object(worker, "process_event")
+@patch.object(worker, "acknowledge_event")
+def test_process_message_retries_failed_event(
+    mock_acknowledge,
+    mock_process_event,
+    mock_handle_failure,
+):
+    mock_process_event.return_value = False
+
+    fields = {
+        "event_id": "event_123",
+        "event_type": "delivery.assigned",
+        "order_id": "order_123",
+        "data": "{}",
+    }
+
+    worker.process_message("message_123", fields)
+
+    mock_acknowledge.assert_not_called()
+
+    mock_handle_failure.assert_called_once_with(
+        "message_123",
+        fields,
+        "Event processing returned False",
+    )
+
+
+@patch.object(worker, "handle_processing_failure")
+@patch.object(worker, "process_event")
+@patch.object(worker, "acknowledge_event")
+def test_process_message_handles_processing_exception(
+    mock_acknowledge,
+    mock_process_event,
+    mock_handle_failure,
+):
+    mock_process_event.side_effect = RuntimeError(
+        "Database unavailable"
+    )
+
+    fields = {
+        "event_id": "event_123",
+        "event_type": "delivery.assigned",
+        "order_id": "order_123",
+        "data": "{}",
+    }
+
+    worker.process_message("message_123", fields)
+
+    mock_acknowledge.assert_not_called()
+
+    mock_handle_failure.assert_called_once()
+
+    call_args = mock_handle_failure.call_args
+
+    assert call_args.args[0] == "message_123"
+    assert call_args.args[1] == fields
+    assert isinstance(call_args.args[2], RuntimeError)
+    assert str(call_args.args[2]) == "Database unavailable"
+
+
+@patch.object(worker, "handle_processing_failure")
+@patch.object(worker, "process_event")
+@patch.object(worker, "acknowledge_event")
+def test_process_message_does_not_acknowledge_failed_event(
+    mock_acknowledge,
+    mock_process_event,
+    mock_handle_failure,
+):
+    mock_process_event.return_value = False
+
+    fields = {
+        "event_id": "event_123",
+        "event_type": "delivery.assigned",
+        "order_id": "order_123",
+        "data": "{}",
+    }
+
+    worker.process_message("message_123", fields)
+
+    mock_acknowledge.assert_not_called()
+    mock_handle_failure.assert_called_once()
+
+
+@patch.object(worker, "acknowledge_event")
+@patch.object(worker, "process_event")
+def test_process_message_leaves_event_pending_when_ack_fails(
+    mock_process_event,
+    mock_acknowledge,
+):
+    mock_process_event.return_value = True
+
+    mock_acknowledge.side_effect = redis.exceptions.RedisError(
+        "ACK failed"
+    )
+
+    worker.process_message(
+        "message_123",
+        {"event_id": "event_123"},
+    )
+
+    mock_acknowledge.assert_called_once_with("message_123")
