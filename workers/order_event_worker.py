@@ -8,9 +8,12 @@ import redis
 
 from lib.event_reliability import handle_failed_message
 from lib.events import ORDER_EVENTS_STREAM
+from lib.logger import get_logger
 from lib.redis import redis_client
 from workers.delivery_client import create_delivery
 
+
+logger = get_logger(__name__)
 
 CONSUMER_GROUP = "flowmesh-workers"
 CONSUMER_NAME = "order-event-worker-1"
@@ -25,7 +28,10 @@ shutdown_event = threading.Event()
 
 def request_shutdown(signum, frame):
     """Request a graceful worker shutdown."""
-    print(f"Shutdown signal received: {signum}")
+    logger.info(
+        "Shutdown signal received",
+        extra={"signal": signum},
+    )
     shutdown_event.set()
 
 
@@ -44,7 +50,11 @@ def ensure_consumer_group():
             id="0",
             mkstream=True,
         )
-        print(f"Created consumer group: {CONSUMER_GROUP}")
+
+        logger.info(
+            "Created consumer group",
+            extra={"consumer_group": CONSUMER_GROUP},
+        )
 
     except Exception as error:
         if "BUSYGROUP" in str(error):
@@ -61,29 +71,44 @@ def process_event(message_id, fields=None):
     order_id = fields.get("order_id")
     event_id = fields.get("event_id")
 
+    event_context = {
+        "message_id": message_id,
+        "event_id": event_id,
+        "event_type": event_type,
+        "order_id": order_id,
+    }
+
     try:
         data = json.loads(fields.get("data", "{}"))
 
         if not isinstance(data, dict):
             raise ValueError("Event data must be a JSON object")
 
-    except (json.JSONDecodeError, TypeError, ValueError) as error:
-        print(f"Invalid event data for {message_id}: {error}")
+    except (json.JSONDecodeError, TypeError, ValueError):
+        logger.exception(
+            "Invalid event data",
+            extra=event_context,
+        )
         return False
 
-    print(f"Received event: {event_type}")
-    print(f"Message ID: {message_id}")
-    print(f"Event ID: {event_id}")
-    print(f"Order ID: {order_id}")
-    print(f"Data: {data}")
+    logger.info(
+        "Received order event",
+        extra={**event_context, "data": data},
+    )
 
     if event_type == "order.created":
         if not order_id:
-            print("Skipping order.created event without an order_id")
+            logger.warning(
+                "Skipping order.created event without an order_id",
+                extra=event_context,
+            )
             return True
 
         if not event_id:
-            print("Order event is missing event_id")
+            logger.error(
+                "Order event is missing event_id",
+                extra=event_context,
+            )
             return False
 
         result = create_delivery(
@@ -92,17 +117,29 @@ def process_event(message_id, fields=None):
         )
 
         if isinstance(result, dict) and result.get("already_exists"):
-            print(f"Delivery already exists for order {order_id}")
+            logger.info(
+                "Delivery already exists",
+                extra=event_context,
+            )
             return True
 
         if result is None:
-            print(f"Could not create delivery for order {order_id}")
+            logger.warning(
+                "Could not create delivery",
+                extra=event_context,
+            )
             return False
 
-        print(f"Delivery processed for order {order_id}")
+        logger.info(
+            "Delivery processed successfully",
+            extra=event_context,
+        )
         return True
 
-    print(f"Ignoring unsupported event type: {event_type}")
+    logger.warning(
+        "Ignoring unsupported event type",
+        extra=event_context,
+    )
     return True
 
 
@@ -128,23 +165,44 @@ def handle_processing_failure(message_id, fields, error):
         )
 
         if result == "dead_lettered":
-            print(f"Event {message_id} moved to dead-letter stream.")
+            logger.warning(
+                "Event moved to dead-letter stream",
+                extra={
+                    "message_id": message_id,
+                    "event_id": fields.get("event_id"),
+                    "order_id": fields.get("order_id"),
+                },
+            )
 
-    except redis.exceptions.RedisError as redis_error:
-        print(
-            f"Could not apply retry policy to event "
-            f"{message_id}: {redis_error}"
+    except redis.exceptions.RedisError:
+        logger.exception(
+            "Could not apply retry policy",
+            extra={
+                "message_id": message_id,
+                "event_id": fields.get("event_id"),
+                "order_id": fields.get("order_id"),
+            },
         )
 
 
 def process_message(message_id, fields):
     """Process one message and apply ACK, retry, or dead-letter behavior."""
+    event_context = {
+        "message_id": message_id,
+        "event_id": fields.get("event_id"),
+        "order_id": fields.get("order_id"),
+    }
+
     try:
         processed = process_event(message_id, fields)
 
         if processed:
             acknowledge_event(message_id)
-            print(f"Acknowledged event {message_id}")
+
+            logger.info(
+                "Acknowledged event",
+                extra=event_context,
+            )
             return
 
         handle_processing_failure(
@@ -154,7 +212,10 @@ def process_message(message_id, fields):
         )
 
     except Exception as error:
-        print(f"Error processing event {message_id}: {error}")
+        logger.exception(
+            "Error processing event",
+            extra=event_context,
+        )
 
         handle_processing_failure(
             message_id,
@@ -165,7 +226,7 @@ def process_message(message_id, fields):
 
 def recover_pending_messages():
     """Claim and retry messages left pending by previous consumers."""
-    print("Checking for pending order events...")
+    logger.info("Checking for pending order events")
 
     next_id = "0-0"
 
@@ -182,12 +243,12 @@ def recover_pending_messages():
 
             next_id, messages, _deleted_ids = response
 
-        except redis.exceptions.RedisError as error:
-            print(f"Redis error while recovering pending events: {error}")
+        except redis.exceptions.RedisError:
+            logger.exception("Redis error while recovering pending events")
             return
 
-        except (TypeError, ValueError) as error:
-            print(f"Unexpected XAUTOCLAIM response: {error}")
+        except (TypeError, ValueError):
+            logger.exception("Unexpected XAUTOCLAIM response")
             return
 
         for message_id, fields in messages:
@@ -204,7 +265,7 @@ def main():
     # Do not clear shutdown_event here.
     # A previously requested shutdown must be respected.
     if shutdown_event.is_set():
-        print("Shutdown already requested. Worker will not start.")
+        logger.info("Shutdown already requested. Worker will not start.")
         return
 
     ensure_consumer_group()
@@ -214,8 +275,15 @@ def main():
 
     last_recovery_time = time.monotonic()
 
-    print("Order event worker is running...")
-    print("Press Ctrl+C to shut down gracefully.")
+    logger.info(
+        "Order event worker is running",
+        extra={
+            "consumer_group": CONSUMER_GROUP,
+            "consumer_name": CONSUMER_NAME,
+            "stream": ORDER_EVENTS_STREAM,
+        },
+    )
+    logger.info("Press Ctrl+C to shut down gracefully")
 
     try:
         while not shutdown_event.is_set():
@@ -244,22 +312,22 @@ def main():
                     last_recovery_time = now
 
             except redis.exceptions.TimeoutError:
-                print("Redis read timed out; retrying...")
+                logger.warning("Redis read timed out; retrying")
 
-            except redis.exceptions.RedisError as error:
-                print(f"Redis error in order event worker: {error}")
+            except redis.exceptions.RedisError:
+                logger.exception("Redis error in order event worker")
 
                 if not shutdown_event.is_set():
                     time.sleep(2)
 
-            except Exception as error:
-                print(f"Unexpected order event worker error: {error}")
+            except Exception:
+                logger.exception("Unexpected order event worker error")
 
                 if not shutdown_event.is_set():
                     time.sleep(2)
 
     finally:
-        print("Order event worker shut down gracefully.")
+        logger.info("Order event worker shut down gracefully")
 
 
 if __name__ == "__main__":
