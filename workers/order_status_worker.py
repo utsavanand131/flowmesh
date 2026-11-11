@@ -1,5 +1,7 @@
 
 import json
+import signal
+import threading
 import time
 
 import redis
@@ -19,7 +21,22 @@ PENDING_IDLE_THRESHOLD_MS = 60_000
 CLAIM_BATCH_SIZE = 10
 RECOVERY_INTERVAL_SECONDS = 30
 
+# Shared shutdown signal for the worker.
+shutdown_event = threading.Event()
+
 order_manager = OrderManager()
+
+
+def request_shutdown(signum, frame):
+    """Request a graceful worker shutdown."""
+    print(f"Shutdown signal received: {signum}")
+    shutdown_event.set()
+
+
+def install_signal_handlers():
+    """Register handlers for normal termination signals."""
+    signal.signal(signal.SIGINT, request_shutdown)
+    signal.signal(signal.SIGTERM, request_shutdown)
 
 
 def ensure_consumer_group():
@@ -44,7 +61,11 @@ def process_event(message_id, fields):
 
     try:
         data = json.loads(fields.get("data", "{}"))
-    except (json.JSONDecodeError, TypeError) as error:
+
+        if not isinstance(data, dict):
+            raise ValueError("Event data must be a JSON object")
+
+    except (json.JSONDecodeError, TypeError, ValueError) as error:
         print("Invalid event data:", message_id, error)
         return False
 
@@ -140,14 +161,17 @@ def handle_processing_failure(message_id, fields, error):
             group=CONSUMER_GROUP,
             message_id=message_id,
             fields=fields,
-            error=error,
+            error=str(error),
         )
 
         if result == "retry":
             print("Order status event will be retried:", message_id)
 
         elif result == "dead_lettered":
-            print("Order status event moved to dead-letter stream:", message_id)
+            print(
+                "Order status event moved to dead-letter stream:",
+                message_id,
+            )
 
         return result
 
@@ -201,7 +225,7 @@ def recover_pending_messages():
 
     start_id = "0-0"
 
-    while True:
+    while not shutdown_event.is_set():
         try:
             next_id, claimed_messages, deleted_ids = (
                 redis_client.xautoclaim(
@@ -220,8 +244,13 @@ def recover_pending_messages():
                     deleted_ids,
                 )
 
+            # Finish every message already claimed.
             for message_id, fields in claimed_messages:
                 process_message(message_id, fields)
+
+            # Stop scanning for additional batches after shutdown.
+            if shutdown_event.is_set():
+                break
 
             # Redis returns 0-0 when the scan is complete.
             if next_id == "0-0":
@@ -237,51 +266,86 @@ def recover_pending_messages():
 
 
 def main():
+    """Consume events and shut down gracefully when requested."""
+    install_signal_handlers()
+
+    # Respect a shutdown request received before startup.
+    if shutdown_event.is_set():
+        print("Shutdown already requested. Worker will not start.")
+        return
+
     ensure_consumer_group()
+
+    if shutdown_event.is_set():
+        print("Shutdown requested. Skipping pending-message recovery.")
+        return
+
     recover_pending_messages()
+
+    if shutdown_event.is_set():
+        print("Shutdown requested. Skipping new message consumption.")
+        print("Order Status Worker shut down gracefully.")
+        return
 
     print("FlowMesh Order Status Worker running...")
     print("Listening to:", DELIVERY_EVENTS_STREAM)
+    print("Press Ctrl+C to shut down gracefully.")
 
     last_recovery_time = time.monotonic()
 
-    while True:
-        try:
-            messages = redis_client.xreadgroup(
-                groupname=CONSUMER_GROUP,
-                consumername=CONSUMER_NAME,
-                streams={DELIVERY_EVENTS_STREAM: ">"},
-                count=10,
-                block=5000,
-            )
-
-            for _, stream_messages in messages:
-                for message_id, fields in stream_messages:
-                    process_message(message_id, fields)
-
-        except redis.exceptions.TimeoutError:
-            pass
-
-        except redis.exceptions.RedisError as error:
-            print("Redis worker error:", error)
-            time.sleep(2)
-
-        except Exception as error:
-            print("Unexpected worker error:", error)
-            time.sleep(2)
-
-        if (
-            time.monotonic() - last_recovery_time
-            >= RECOVERY_INTERVAL_SECONDS
-        ):
+    try:
+        while not shutdown_event.is_set():
             try:
-                recover_pending_messages()
+                messages = redis_client.xreadgroup(
+                    groupname=CONSUMER_GROUP,
+                    consumername=CONSUMER_NAME,
+                    streams={DELIVERY_EVENTS_STREAM: ">"},
+                    count=10,
+                    block=5000,
+                )
+
+                # Finish messages already fetched before exiting.
+                for _, stream_messages in messages:
+                    for message_id, fields in stream_messages:
+                        process_message(message_id, fields)
+
+                if shutdown_event.is_set():
+                    break
+
+            except redis.exceptions.TimeoutError:
+                pass
+
             except redis.exceptions.RedisError as error:
-                print("Periodic recovery failed:", error)
+                print("Redis worker error:", error)
 
-            last_recovery_time = time.monotonic()
+                if not shutdown_event.is_set():
+                    time.sleep(2)
 
-        time.sleep(0.1)
+            except Exception as error:
+                print("Unexpected worker error:", error)
+
+                if not shutdown_event.is_set():
+                    time.sleep(2)
+
+            if shutdown_event.is_set():
+                break
+
+            if (
+                time.monotonic() - last_recovery_time
+                >= RECOVERY_INTERVAL_SECONDS
+            ):
+                try:
+                    recover_pending_messages()
+                except redis.exceptions.RedisError as error:
+                    print("Periodic recovery failed:", error)
+
+                last_recovery_time = time.monotonic()
+
+            if not shutdown_event.is_set():
+                time.sleep(0.1)
+
+    finally:
+        print("Order Status Worker shut down gracefully.")
 
 
 if __name__ == "__main__":
