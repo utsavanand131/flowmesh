@@ -11,6 +11,8 @@ from lib.events import ORDER_EVENTS_STREAM
 from lib.logger import get_logger
 from lib.metrics import (
     EVENTS_ACK_FAILED_TOTAL,
+    EVENTS_ACK_ZERO_TOTAL,
+    EVENTS_ACK_EXCEPTION_TOTAL,
     EVENTS_PROCESSED_TOTAL,
     EVENTS_RECOVERED_TOTAL,
     increment_metric,
@@ -151,11 +153,12 @@ def process_event(message_id, fields=None):
 
 def acknowledge_event(message_id):
     """Acknowledge a successfully processed Redis message."""
-    redis_client.xack(
+    acknowledged = redis_client.xack(
         ORDER_EVENTS_STREAM,
         CONSUMER_GROUP,
         message_id,
     )
+    return bool(acknowledged)
 
 
 def handle_processing_failure(message_id, fields, error):
@@ -199,35 +202,17 @@ def process_message(message_id, fields):
         "order_id": fields.get("order_id"),
     }
 
+    # Process the event first. Processing failures use retry/DLQ handling.
     try:
         processed = process_event(message_id, fields)
 
-        if processed:
-            try:
-                acknowledge_event(message_id)
-            except Exception:
-                increment_metric(
-                    redis_client,
-                    EVENTS_ACK_FAILED_TOTAL,
-                )
-                raise
-
-            increment_metric(
-                redis_client,
-                EVENTS_PROCESSED_TOTAL,
-            )
-
-            logger.info(
-                "Acknowledged event",
-                extra=event_context,
+        if not processed:
+            handle_processing_failure(
+                message_id,
+                fields,
+                "Event processing returned False",
             )
             return
-
-        handle_processing_failure(
-            message_id,
-            fields,
-            "Event processing returned False",
-        )
 
     except Exception as error:
         logger.exception(
@@ -239,6 +224,54 @@ def process_message(message_id, fields):
             message_id,
             fields,
             error,
+        )
+        return
+
+    # Processing succeeded. Handle acknowledgement separately so that
+    # an ACK failure is not incorrectly treated as a processing failure.
+    try:
+        acknowledged = acknowledge_event(message_id)
+
+    except redis.exceptions.RedisError:
+        increment_metric(
+            redis_client,
+            EVENTS_ACK_FAILED_TOTAL,
+        )
+        increment_metric(
+            redis_client,
+            EVENTS_ACK_EXCEPTION_TOTAL,
+        )
+
+        logger.exception(
+            "Could not acknowledge event; message remains pending",
+            extra=event_context,
+        )
+        return
+
+    if acknowledged:
+        increment_metric(
+            redis_client,
+            EVENTS_PROCESSED_TOTAL,
+        )
+
+        logger.info(
+            "Acknowledged event",
+            extra=event_context,
+        )
+
+    else:
+        increment_metric(
+            redis_client,
+            EVENTS_ACK_FAILED_TOTAL,
+        )
+        increment_metric(
+            redis_client,
+            EVENTS_ACK_ZERO_TOTAL,
+        )
+
+        logger.warning(
+            "Event was not acknowledged because Redis returned zero",
+            extra=event_context,
         )
 
 

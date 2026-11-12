@@ -1,3 +1,4 @@
+
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -10,6 +11,9 @@ EVENTS_RETRIED_TOTAL = "events_retried_total"
 EVENTS_DEAD_LETTERED_TOTAL = "events_dead_lettered_total"
 EVENTS_RECOVERED_TOTAL = "events_recovered_total"
 EVENTS_ACK_FAILED_TOTAL = "events_ack_failed_total"
+
+EVENTS_ACK_ZERO_TOTAL = "events_ack_zero_total"
+EVENTS_ACK_EXCEPTION_TOTAL = "events_ack_exception_total"
 
 
 def increment_metric(
@@ -37,10 +41,14 @@ def increment_metric(
     try:
         redis_client.incr(key, amount)
         return True
+
     except Exception:
         logger.exception(
             "Failed to increment metric",
-            extra={"metric_name": metric_name, "redis_key": key},
+            extra={
+                "metric_name": metric_name,
+                "redis_key": key,
+            },
         )
         return False
 

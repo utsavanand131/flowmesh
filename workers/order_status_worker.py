@@ -11,6 +11,8 @@ from lib.event_reliability import handle_failed_message
 from lib.logger import get_logger
 from lib.metrics import (
     EVENTS_ACK_FAILED_TOTAL,
+    EVENTS_ACK_ZERO_TOTAL,
+    EVENTS_ACK_EXCEPTION_TOTAL,
     EVENTS_PROCESSED_TOTAL,
     EVENTS_RECOVERED_TOTAL,
     increment_metric,
@@ -77,7 +79,6 @@ def ensure_consumer_group():
 
 def process_event(message_id, fields):
     """Process a delivery event and update the corresponding order."""
-
     event_type = fields.get("event_type")
     order_id = fields.get("order_id")
     event_id = fields.get("event_id")
@@ -192,7 +193,6 @@ def process_event(message_id, fields):
 
     except Exception:
         db.rollback()
-
         logger.exception(
             "Failed to update order status",
             extra=event_context,
@@ -205,7 +205,6 @@ def process_event(message_id, fields):
 
 def acknowledge_event(message_id):
     """Acknowledge a successfully processed Redis message."""
-
     acknowledged = redis_client.xack(
         DELIVERY_EVENTS_STREAM,
         CONSUMER_GROUP,
@@ -228,7 +227,6 @@ def acknowledge_event(message_id):
 
 def handle_processing_failure(message_id, fields, error):
     """Apply the shared retry and dead-letter policy to a failed event."""
-
     event_context = {
         "message_id": message_id,
         "event_id": fields.get("event_id"),
@@ -269,7 +267,6 @@ def handle_processing_failure(message_id, fields, error):
 
 def process_message(message_id, fields):
     """Process one message and apply ACK, retry, or dead-letter behavior."""
-
     event_context = {
         "message_id": message_id,
         "event_id": fields.get("event_id"),
@@ -284,7 +281,6 @@ def process_message(message_id, fields):
             "Order status event processing failed",
             extra=event_context,
         )
-
         handle_processing_failure(message_id, fields, error)
         return
 
@@ -296,6 +292,7 @@ def process_message(message_id, fields):
         )
         return
 
+    # Processing succeeded. Handle ACK separately from processing failures.
     try:
         acknowledged = acknowledge_event(message_id)
 
@@ -303,6 +300,10 @@ def process_message(message_id, fields):
         increment_metric(
             redis_client,
             EVENTS_ACK_FAILED_TOTAL,
+        )
+        increment_metric(
+            redis_client,
+            EVENTS_ACK_EXCEPTION_TOTAL,
         )
 
         logger.exception(
@@ -317,16 +318,20 @@ def process_message(message_id, fields):
             redis_client,
             EVENTS_PROCESSED_TOTAL,
         )
+
     else:
         increment_metric(
             redis_client,
             EVENTS_ACK_FAILED_TOTAL,
         )
+        increment_metric(
+            redis_client,
+            EVENTS_ACK_ZERO_TOTAL,
+        )
 
 
 def recover_pending_messages():
     """Claim and retry eligible messages left pending by a consumer."""
-
     logger.info("Checking for stale pending delivery events")
 
     start_id = "0-0"
@@ -377,7 +382,6 @@ def recover_pending_messages():
 
 def main():
     """Consume events and shut down gracefully when requested."""
-
     install_signal_handlers()
 
     # Respect a shutdown request received before startup.
@@ -458,7 +462,6 @@ def main():
             ):
                 try:
                     recover_pending_messages()
-
                 except redis.exceptions.RedisError:
                     logger.exception("Periodic recovery failed")
 

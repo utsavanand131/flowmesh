@@ -1,16 +1,18 @@
+
 import json
 import signal
 import threading
 import time
 
 import redis
-
 from sqlalchemy.exc import SQLAlchemyError
 
 from lib.event_reliability import handle_failed_message
 from lib.logger import get_logger
 from lib.metrics import (
     EVENTS_ACK_FAILED_TOTAL,
+    EVENTS_ACK_ZERO_TOTAL,
+    EVENTS_ACK_EXCEPTION_TOTAL,
     EVENTS_PROCESSED_TOTAL,
     EVENTS_RECOVERED_TOTAL,
     increment_metric,
@@ -62,12 +64,10 @@ def ensure_consumer_group():
             id="0",
             mkstream=True,
         )
-
         logger.info(
             "Created consumer group",
             extra={"consumer_group": CONSUMER_GROUP},
         )
-
     except Exception as error:
         if "BUSYGROUP" in str(error):
             return
@@ -76,7 +76,6 @@ def ensure_consumer_group():
 
 def process_event(message_id, fields):
     """Process a delivery event and return whether it can be acknowledged."""
-
     event_type = fields.get("event_type")
     order_id = fields.get("order_id")
     event_id = fields.get("event_id")
@@ -162,7 +161,6 @@ def process_event(message_id, fields):
 
     except SQLAlchemyError:
         db.rollback()
-
         logger.exception(
             "Database error while processing delivery event",
             extra=event_context,
@@ -171,7 +169,6 @@ def process_event(message_id, fields):
 
     except Exception:
         db.rollback()
-
         logger.exception(
             "Unexpected error processing delivery event",
             extra=event_context,
@@ -184,7 +181,6 @@ def process_event(message_id, fields):
 
 def handle_delivery_assigned(db, order, order_id):
     """Confirm an order when its delivery has been assigned."""
-
     event_context = {"order_id": order_id}
 
     if order.status == "PENDING":
@@ -201,12 +197,10 @@ def handle_delivery_assigned(db, order, order_id):
                     "new_status": "CONFIRMED",
                 },
             )
-
             return True
 
         except SQLAlchemyError:
             db.rollback()
-
             logger.exception(
                 "Failed to confirm order",
                 extra=event_context,
@@ -234,9 +228,7 @@ def handle_delivery_assigned(db, order, order_id):
 
 def handle_delivery_status_updated(db, order, order_id, data):
     """Validate delivery progress without changing the order status."""
-
     delivery_status = data.get("status")
-
     event_context = {"order_id": order_id}
 
     if delivery_status is None:
@@ -278,7 +270,6 @@ def handle_delivery_status_updated(db, order, order_id, data):
 
 def acknowledge_event(message_id):
     """Acknowledge a successfully processed Redis message."""
-
     acknowledged = redis_client.xack(
         DELIVERY_EVENTS_STREAM,
         CONSUMER_GROUP,
@@ -301,7 +292,6 @@ def acknowledge_event(message_id):
 
 def handle_processing_failure(message_id, fields, error):
     """Apply the shared retry and dead-letter policy to a failed event."""
-
     event_context = {
         "message_id": message_id,
         "event_id": fields.get("event_id"),
@@ -339,7 +329,6 @@ def handle_processing_failure(message_id, fields, error):
 
 def process_message(message_id, fields):
     """Process one message and apply ACK, retry, or dead-letter behavior."""
-
     event_context = {
         "message_id": message_id,
         "event_id": fields.get("event_id"),
@@ -370,19 +359,22 @@ def process_message(message_id, fields):
         )
         return
 
+    # Processing succeeded. Handle ACK separately from processing failures.
     try:
         acknowledged = acknowledge_event(message_id)
 
     except redis.exceptions.RedisError:
-        # Processing succeeded, but ACK failed.
-        # Leave the message pending for recovery.
         increment_metric(
             redis_client,
             EVENTS_ACK_FAILED_TOTAL,
         )
+        increment_metric(
+            redis_client,
+            EVENTS_ACK_EXCEPTION_TOTAL,
+        )
 
         logger.exception(
-            "Could not acknowledge delivery event",
+            "Could not acknowledge delivery event; message remains pending",
             extra=event_context,
         )
         return
@@ -392,16 +384,20 @@ def process_message(message_id, fields):
             redis_client,
             EVENTS_PROCESSED_TOTAL,
         )
+
     else:
         increment_metric(
             redis_client,
             EVENTS_ACK_FAILED_TOTAL,
         )
+        increment_metric(
+            redis_client,
+            EVENTS_ACK_ZERO_TOTAL,
+        )
 
 
 def recover_pending_messages():
     """Claim and retry eligible messages left pending by a consumer."""
-
     logger.info("Checking for pending delivery events")
 
     next_id = "0-0"
@@ -435,7 +431,6 @@ def recover_pending_messages():
                 redis_client,
                 EVENTS_RECOVERED_TOTAL,
             )
-
             process_message(message_id, fields)
 
         # Stop scanning for additional batches when shutdown is requested.
@@ -448,7 +443,6 @@ def recover_pending_messages():
 
 def main():
     """Consume events and shut down gracefully when requested."""
-
     install_signal_handlers()
 
     # Respect a shutdown request that was already received.

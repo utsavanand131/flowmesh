@@ -3,12 +3,27 @@ import grpc
 
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, Field
+from redis.exceptions import RedisError
 
 from services.delivery_service.app import delivery_pb2
 from services.delivery_service.app import delivery_pb2_grpc
 
 from services.order_service.app import order_pb2
 from services.order_service.app import order_pb2_grpc
+
+from lib.metrics import (
+    EVENTS_PROCESSED_TOTAL,
+    EVENTS_FAILED_TOTAL,
+    EVENTS_RETRIED_TOTAL,
+    EVENTS_DEAD_LETTERED_TOTAL,
+    EVENTS_RECOVERED_TOTAL,
+    EVENTS_ACK_FAILED_TOTAL,
+    EVENTS_ACK_ZERO_TOTAL,
+    EVENTS_ACK_EXCEPTION_TOTAL,
+    get_metric,
+)
+
+from lib.redis import redis_client
 
 from .auth_routes import (
     router as auth_router,
@@ -40,6 +55,55 @@ def health_check():
         "service": "api-gateway",
         "status": "healthy",
     }
+
+
+@app.get("/metrics")
+def get_worker_metrics(
+    current_user=Depends(require_admin_user),
+):
+    """Return FlowMesh worker metrics stored in Redis."""
+
+    try:
+        return {
+            "events_processed_total": get_metric(
+                redis_client,
+                EVENTS_PROCESSED_TOTAL,
+            ),
+            "events_failed_total": get_metric(
+                redis_client,
+                EVENTS_FAILED_TOTAL,
+            ),
+            "events_retried_total": get_metric(
+                redis_client,
+                EVENTS_RETRIED_TOTAL,
+            ),
+            "events_dead_lettered_total": get_metric(
+                redis_client,
+                EVENTS_DEAD_LETTERED_TOTAL,
+            ),
+            "events_recovered_total": get_metric(
+                redis_client,
+                EVENTS_RECOVERED_TOTAL,
+            ),
+            "events_ack_failed_total": get_metric(
+                redis_client,
+                EVENTS_ACK_FAILED_TOTAL,
+            ),
+            "events_ack_zero_total": get_metric(
+                redis_client,
+                EVENTS_ACK_ZERO_TOTAL,
+            ),
+            "events_ack_exception_total": get_metric(
+                redis_client,
+                EVENTS_ACK_EXCEPTION_TOTAL,
+            ),
+        }
+
+    except RedisError:
+        raise HTTPException(
+            status_code=503,
+            detail="Metrics service unavailable",
+        )
 
 
 @app.post("/orders")
