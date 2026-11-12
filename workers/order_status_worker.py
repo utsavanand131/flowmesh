@@ -9,6 +9,12 @@ import redis
 from lib.events import DELIVERY_EVENTS_STREAM
 from lib.event_reliability import handle_failed_message
 from lib.logger import get_logger
+from lib.metrics import (
+    EVENTS_ACK_FAILED_TOTAL,
+    EVENTS_PROCESSED_TOTAL,
+    EVENTS_RECOVERED_TOTAL,
+    increment_metric,
+)
 from lib.redis import redis_client
 from services.order_service.app.database import SessionLocal
 from services.order_service.app.order_service import OrderManager
@@ -17,11 +23,14 @@ from services.order_service.app.order_service import OrderManager
 logger = get_logger(__name__)
 
 CONSUMER_GROUP = "flowmesh-order-status-workers"
+
 CONSUMER_NAME = "order-status-worker-1"
 
 # A message must be idle for at least 60 seconds before recovery.
 PENDING_IDLE_THRESHOLD_MS = 60_000
+
 CLAIM_BATCH_SIZE = 10
+
 RECOVERY_INTERVAL_SECONDS = 30
 
 # Shared shutdown signal for the worker.
@@ -68,6 +77,7 @@ def ensure_consumer_group():
 
 def process_event(message_id, fields):
     """Process a delivery event and update the corresponding order."""
+
     event_type = fields.get("event_type")
     order_id = fields.get("order_id")
     event_id = fields.get("event_id")
@@ -195,6 +205,7 @@ def process_event(message_id, fields):
 
 def acknowledge_event(message_id):
     """Acknowledge a successfully processed Redis message."""
+
     acknowledged = redis_client.xack(
         DELIVERY_EVENTS_STREAM,
         CONSUMER_GROUP,
@@ -212,9 +223,12 @@ def acknowledge_event(message_id):
             extra={"message_id": message_id},
         )
 
+    return bool(acknowledged)
+
 
 def handle_processing_failure(message_id, fields, error):
     """Apply the shared retry and dead-letter policy to a failed event."""
+
     event_context = {
         "message_id": message_id,
         "event_id": fields.get("event_id"),
@@ -255,6 +269,7 @@ def handle_processing_failure(message_id, fields, error):
 
 def process_message(message_id, fields):
     """Process one message and apply ACK, retry, or dead-letter behavior."""
+
     event_context = {
         "message_id": message_id,
         "event_id": fields.get("event_id"),
@@ -282,18 +297,36 @@ def process_message(message_id, fields):
         return
 
     try:
-        acknowledge_event(message_id)
+        acknowledged = acknowledge_event(message_id)
 
     except redis.exceptions.RedisError:
+        increment_metric(
+            redis_client,
+            EVENTS_ACK_FAILED_TOTAL,
+        )
+
         logger.exception(
             "Failed to acknowledge order status event; "
             "message remains pending",
             extra=event_context,
         )
+        return
+
+    if acknowledged:
+        increment_metric(
+            redis_client,
+            EVENTS_PROCESSED_TOTAL,
+        )
+    else:
+        increment_metric(
+            redis_client,
+            EVENTS_ACK_FAILED_TOTAL,
+        )
 
 
 def recover_pending_messages():
     """Claim and retry eligible messages left pending by a consumer."""
+
     logger.info("Checking for stale pending delivery events")
 
     start_id = "0-0"
@@ -319,6 +352,10 @@ def recover_pending_messages():
 
             # Finish every message already claimed.
             for message_id, fields in claimed_messages:
+                increment_metric(
+                    redis_client,
+                    EVENTS_RECOVERED_TOTAL,
+                )
                 process_message(message_id, fields)
 
             # Stop scanning for additional batches after shutdown.
@@ -340,6 +377,7 @@ def recover_pending_messages():
 
 def main():
     """Consume events and shut down gracefully when requested."""
+
     install_signal_handlers()
 
     # Respect a shutdown request received before startup.
@@ -372,6 +410,7 @@ def main():
             "consumer_name": CONSUMER_NAME,
         },
     )
+
     logger.info("Press Ctrl+C to shut down gracefully")
 
     last_recovery_time = time.monotonic()

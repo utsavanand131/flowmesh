@@ -9,6 +9,12 @@ import redis
 from lib.event_reliability import handle_failed_message
 from lib.events import ORDER_EVENTS_STREAM
 from lib.logger import get_logger
+from lib.metrics import (
+    EVENTS_ACK_FAILED_TOTAL,
+    EVENTS_PROCESSED_TOTAL,
+    EVENTS_RECOVERED_TOTAL,
+    increment_metric,
+)
 from lib.redis import redis_client
 from workers.delivery_client import create_delivery
 
@@ -197,7 +203,19 @@ def process_message(message_id, fields):
         processed = process_event(message_id, fields)
 
         if processed:
-            acknowledge_event(message_id)
+            try:
+                acknowledge_event(message_id)
+            except Exception:
+                increment_metric(
+                    redis_client,
+                    EVENTS_ACK_FAILED_TOTAL,
+                )
+                raise
+
+            increment_metric(
+                redis_client,
+                EVENTS_PROCESSED_TOTAL,
+            )
 
             logger.info(
                 "Acknowledged event",
@@ -252,6 +270,10 @@ def recover_pending_messages():
             return
 
         for message_id, fields in messages:
+            increment_metric(
+                redis_client,
+                EVENTS_RECOVERED_TOTAL,
+            )
             process_message(message_id, fields)
 
         if next_id == "0-0":
