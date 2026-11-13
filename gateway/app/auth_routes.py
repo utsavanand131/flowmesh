@@ -12,12 +12,14 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from jwt.exceptions import InvalidTokenError
 
 from gateway.app.auth import (
     create_access_token,
     decode_access_token,
     hash_password,
     verify_password,
+    validate_password_length,
 )
 
 from gateway.app.auth_models import OAuthAccount, User
@@ -213,6 +215,14 @@ def register(
 ):
     email = normalize_email(request.email)
 
+    try:
+        validate_password_length(request.password)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+    )
+
     existing_user = (
         db.query(User)
         .filter(User.email == email)
@@ -263,6 +273,14 @@ def login(
     db: Session = Depends(get_db),
 ):
     email = normalize_email(request.email)
+
+    try:
+        validate_password_length(request.password)
+    except ValueError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password",
+    )
 
     user = (
         db.query(User)
@@ -333,13 +351,13 @@ def require_current_user(
             detail="Not authenticated",
         )
 
-    try:
-        payload = decode_access_token(access_token)
-    except Exception:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired token",
-        )
+        try:
+            payload = decode_access_token(access_token)
+        except InvalidTokenError:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired token",
+            ) from None
 
     user_id = payload.get("sub")
 

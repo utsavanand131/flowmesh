@@ -1,3 +1,4 @@
+
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -14,14 +15,27 @@ JWT_SECRET = os.getenv("JWT_SECRET")
 if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET is not set")
 
+if len(JWT_SECRET.encode("utf-8")) < 32:
+    raise RuntimeError("JWT_SECRET must be at least 32 bytes")
+
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = 60 * 24 * 7
 
+BCRYPT_MAX_PASSWORD_BYTES = 72
+
+
+def validate_password_length(password: str) -> None:
+    if len(password.encode("utf-8")) > BCRYPT_MAX_PASSWORD_BYTES:
+        raise ValueError(
+            "Password cannot exceed 72 UTF-8 bytes"
+        )
+
 
 def hash_password(password: str) -> str:
-    password_bytes = password.encode("utf-8")
+    validate_password_length(password)
 
+    password_bytes = password.encode("utf-8")
     salt = bcrypt.gensalt()
 
     hashed = bcrypt.hashpw(
@@ -36,8 +50,9 @@ def verify_password(
     password: str,
     password_hash: str,
 ) -> bool:
-    password_bytes = password.encode("utf-8")
+    validate_password_length(password)
 
+    password_bytes = password.encode("utf-8")
     password_hash_bytes = password_hash.encode("utf-8")
 
     return bcrypt.checkpw(
@@ -75,4 +90,7 @@ def decode_access_token(
         token,
         JWT_SECRET,
         algorithms=[JWT_ALGORITHM],
+        options={
+            "require": ["sub", "iat", "exp"],
+        },
     )
