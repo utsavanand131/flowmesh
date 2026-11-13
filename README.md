@@ -388,7 +388,7 @@ uvicorn gateway.app.main:app --reload --port 8000
 ```bash
 cd C:\projects\flowmesh
 .venv\Scripts\activate
-set PYTHONPATH=C:\projects\flowmesh
+set PYTHONPATH=C:\projects\flowmesh\gateway\app;C:\projects\flowmesh\services\order_service\app;C:\projects\flowmesh\services\inventory_service\app;C:\projects\flowmesh\services\delivery_service\app
 python -m workers.order_event_worker
 ```
 
@@ -397,7 +397,7 @@ python -m workers.order_event_worker
 ```bash
 cd C:\projects\flowmesh
 .venv\Scripts\activate
-set PYTHONPATH=C:\projects\flowmesh
+set PYTHONPATH=C:\projects\flowmesh\gateway\app;C:\projects\flowmesh\services\order_service\app;C:\projects\flowmesh\services\inventory_service\app;C:\projects\flowmesh\services\delivery_service\app
 python -m workers.delivery_event_worker
 ```
 
@@ -406,7 +406,7 @@ python -m workers.delivery_event_worker
 ```bash
 cd C:\projects\flowmesh
 .venv\Scripts\activate
-set PYTHONPATH=C:\projects\flowmesh
+set PYTHONPATH=C:\projects\flowmesh\gateway\app;C:\projects\flowmesh\services\order_service\app;C:\projects\flowmesh\services\inventory_service\app;C:\projects\flowmesh\services\delivery_service\app
 python -m workers.order_status_worker
 ```
 
@@ -415,7 +415,7 @@ python -m workers.order_status_worker
 ```bash
 cd C:\projects\flowmesh
 .venv\Scripts\activate
-set PYTHONPATH=C:\projects\flowmesh
+set PYTHONPATH=C:\projects\flowmesh\gateway\app;C:\projects\flowmesh\services\order_service\app;C:\projects\flowmesh\services\inventory_service\app;C:\projects\flowmesh\services\delivery_service\app
 python -m workers.outbox_publisher
 ```
 
@@ -424,7 +424,7 @@ python -m workers.outbox_publisher
 ```bash
 cd C:\projects\flowmesh
 .venv\Scripts\activate
-set PYTHONPATH=C:\projects\flowmesh
+set PYTHONPATH=C:\projects\flowmesh\gateway\app;C:\projects\flowmesh\services\order_service\app;C:\projects\flowmesh\services\inventory_service\app;C:\projects\flowmesh\services\delivery_service\app
 python -m workers.delivery_outbox_publisher
 ```
 
