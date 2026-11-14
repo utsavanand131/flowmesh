@@ -1,11 +1,9 @@
-
 import os
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
 import jwt
 from dotenv import load_dotenv
-
 
 load_dotenv()
 
@@ -27,9 +25,7 @@ BCRYPT_MAX_PASSWORD_BYTES = 72
 
 def validate_password_length(password: str) -> None:
     if len(password.encode("utf-8")) > BCRYPT_MAX_PASSWORD_BYTES:
-        raise ValueError(
-            "Password cannot exceed 72 UTF-8 bytes"
-        )
+        raise ValueError("Password cannot exceed 72 UTF-8 bytes")
 
 
 def hash_password(password: str) -> str:
@@ -66,9 +62,7 @@ def create_access_token(
 ) -> str:
     now = datetime.now(timezone.utc)
 
-    expires_at = now + timedelta(
-        minutes=JWT_EXPIRE_MINUTES
-    )
+    expires_at = now + timedelta(minutes=JWT_EXPIRE_MINUTES)
 
     payload = {
         "sub": user_id,

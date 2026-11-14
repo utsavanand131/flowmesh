@@ -1,4 +1,3 @@
-
 import base64
 import hashlib
 import os
@@ -47,14 +46,16 @@ COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax").lower()
 
 if COOKIE_SAMESITE not in {"lax", "strict", "none"}:
-    raise ValueError(
-        "COOKIE_SAMESITE must be 'lax', 'strict', or 'none'"
-    )
+    raise ValueError("COOKIE_SAMESITE must be 'lax', 'strict', or 'none'")
 
 if COOKIE_SAMESITE == "none" and not COOKIE_SECURE:
-    raise ValueError(
-        "COOKIE_SECURE must be true when COOKIE_SAMESITE is 'none'"
-    )
+    raise ValueError("COOKIE_SECURE must be true when COOKIE_SAMESITE is 'none'")
+
+# Production cookie security
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
+
+if ENVIRONMENT == "production" and not COOKIE_SECURE:
+    raise ValueError("COOKIE_SECURE must be true in production")
 
 # -------------------------------------------------------------------
 # OAuth endpoints
@@ -195,9 +196,7 @@ def clear_github_code_verifier_cookie(response: Response) -> None:
 
 
 def create_pkce_code_challenge(code_verifier: str) -> str:
-    digest = hashlib.sha256(
-        code_verifier.encode("utf-8")
-    ).digest()
+    digest = hashlib.sha256(code_verifier.encode("utf-8")).digest()
 
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("utf-8")
 
@@ -221,13 +220,9 @@ def register(
         raise HTTPException(
             status_code=422,
             detail=str(error),
-    )
+        )
 
-    existing_user = (
-        db.query(User)
-        .filter(User.email == email)
-        .first()
-    )
+    existing_user = db.query(User).filter(User.email == email).first()
 
     if existing_user is not None:
         raise HTTPException(
@@ -280,13 +275,9 @@ def login(
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password",
-    )
+        )
 
-    user = (
-        db.query(User)
-        .filter(User.email == email)
-        .first()
-    )
+    user = db.query(User).filter(User.email == email).first()
 
     if user is None or user.password_hash is None:
         raise HTTPException(
@@ -340,7 +331,8 @@ def logout(response: Response):
 # -------------------------------------------------------------------
 # Current authenticated user
 # -------------------------------------------------------------------
- 
+
+
 def require_current_user(
     access_token: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
@@ -351,13 +343,13 @@ def require_current_user(
             detail="Not authenticated",
         )
 
-        try:
-            payload = decode_access_token(access_token)
-        except InvalidTokenError:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid or expired token",
-            ) from None
+    try:
+        payload = decode_access_token(access_token)
+    except InvalidTokenError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+        ) from None
 
     user_id = payload.get("sub")
 
@@ -376,7 +368,6 @@ def require_current_user(
         )
 
     return user
-
 
 
 # -------------------------------------------------------------------
@@ -450,9 +441,7 @@ def google_login():
         "prompt": "select_account",
     }
 
-    authorization_url = (
-        f"{GOOGLE_AUTHORIZATION_URL}?{urlencode(params)}"
-    )
+    authorization_url = f"{GOOGLE_AUTHORIZATION_URL}?{urlencode(params)}"
 
     response = RedirectResponse(
         url=authorization_url,
@@ -554,9 +543,7 @@ def google_callback(
 
             userinfo_response = client.get(
                 GOOGLE_USERINFO_URL,
-                headers={
-                    "Authorization": f"Bearer {access_token}"
-                },
+                headers={"Authorization": f"Bearer {access_token}"},
             )
             userinfo_response.raise_for_status()
             google_user = userinfo_response.json()
@@ -611,11 +598,7 @@ def google_callback(
             )
 
     else:
-        user = (
-            db.query(User)
-            .filter(User.email == email)
-            .first()
-        )
+        user = db.query(User).filter(User.email == email).first()
 
         if user is None:
             user = User(
@@ -714,9 +697,7 @@ def github_login():
         "code_challenge_method": "S256",
     }
 
-    authorization_url = (
-        f"{GITHUB_AUTHORIZATION_URL}?{urlencode(params)}"
-    )
+    authorization_url = f"{GITHUB_AUTHORIZATION_URL}?{urlencode(params)}"
 
     response = RedirectResponse(
         url=authorization_url,
@@ -867,10 +848,7 @@ def github_callback(
     github_email = None
 
     for email_entry in github_emails:
-        if (
-            email_entry.get("primary") is True
-            and email_entry.get("verified") is True
-        ):
+        if email_entry.get("primary") is True and email_entry.get("verified") is True:
             github_email = email_entry.get("email")
             break
 
@@ -908,11 +886,7 @@ def github_callback(
             )
 
     else:
-        user = (
-            db.query(User)
-            .filter(User.email == email)
-            .first()
-        )
+        user = db.query(User).filter(User.email == email).first()
 
         if user is None:
             user = User(
