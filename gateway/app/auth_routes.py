@@ -600,14 +600,23 @@ def google_callback(
     else:
         user = db.query(User).filter(User.email == email).first()
 
-        if user is None:
-            user = User(
-                email=email,
-                name=google_name,
-                password_hash=None,
+        if user is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "An account with this email already exists. "
+                    "Please sign in using your existing method before "
+                    "linking your Google account."
+                ),
             )
-            db.add(user)
-            db.flush()
+
+        user = User(
+            email=email,
+            name=google_name,
+            password_hash=None,
+        )
+        db.add(user)
+        db.flush()
 
         oauth_account = OAuthAccount(
             user_id=user.id,
@@ -888,14 +897,23 @@ def github_callback(
     else:
         user = db.query(User).filter(User.email == email).first()
 
-        if user is None:
-            user = User(
-                email=email,
-                name=github_name,
-                password_hash=None,
+        if user is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "An account with this email already exists. "
+                    "Please sign in using your existing method before "
+                    "linking your GitHub account."
+                ),
             )
-            db.add(user)
-            db.flush()
+
+        user = User(
+            email=email,
+            name=github_name,
+            password_hash=None,
+        )
+        db.add(user)
+        db.flush()
 
         oauth_account = OAuthAccount(
             user_id=user.id,
