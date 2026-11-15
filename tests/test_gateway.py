@@ -1,7 +1,7 @@
-
 from unittest.mock import MagicMock, patch
 
 import grpc
+from redis.exceptions import RedisError
 
 
 def test_health_endpoint(client):
@@ -358,9 +358,7 @@ def test_get_order_hides_another_users_order(
         delivery_status="",
     )
 
-    response = authenticated_client.get(
-        "/orders/another-users-order"
-    )
+    response = authenticated_client.get("/orders/another-users-order")
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Order not found"
@@ -530,4 +528,74 @@ def test_admin_update_delivery_service_unavailable(
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Delivery service unavailable"
+    mock_channel.close.assert_called_once()
+
+
+def test_customer_cannot_access_metrics(authenticated_client):
+    response = authenticated_client.get("/metrics")
+
+    assert response.status_code == 403
+
+
+@patch("gateway.app.main.get_metric")
+def test_admin_can_access_metrics(mock_get_metric, admin_client):
+    mock_get_metric.return_value = 0
+
+    response = admin_client.get("/metrics")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "events_processed_total": 0,
+        "events_failed_total": 0,
+        "events_retried_total": 0,
+        "events_dead_lettered_total": 0,
+        "events_recovered_total": 0,
+        "events_ack_failed_total": 0,
+        "events_ack_zero_total": 0,
+        "events_ack_exception_total": 0,
+    }
+
+    assert mock_get_metric.call_count == 8
+
+
+@patch("gateway.app.main.get_metric")
+def test_metrics_returns_503_when_redis_is_unavailable(
+    mock_get_metric,
+    admin_client,
+):
+    mock_get_metric.side_effect = RedisError("Redis unavailable")
+
+    response = admin_client.get("/metrics")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Metrics service unavailable"
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.delivery_pb2_grpc.DeliveryServiceStub")
+def test_admin_update_delivery_invalid_argument(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    error = grpc.RpcError()
+    error.code = lambda: grpc.StatusCode.INVALID_ARGUMENT
+    error.details = lambda: "Invalid delivery status"
+
+    mock_stub.UpdateDeliveryStatus.side_effect = error
+
+    response = admin_client.patch(
+        "/deliveries/test-delivery-123/status",
+        json={"status": "PICKED_UP"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid delivery status"
+
     mock_channel.close.assert_called_once()
