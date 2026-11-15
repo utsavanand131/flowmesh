@@ -9,13 +9,10 @@ import inventory_pb2_grpc
 from database import SessionLocal
 from inventory_service import InventoryManager
 
-
 inventory_manager = InventoryManager()
 
 
-class InventoryService(
-    inventory_pb2_grpc.InventoryServiceServicer
-):
+class InventoryService(inventory_pb2_grpc.InventoryServiceServicer):
     def CheckStock(self, request, context):
         db = SessionLocal()
 
@@ -32,14 +29,23 @@ class InventoryService(
                 available=result["available"],
             )
 
-        except SQLAlchemyError:
-            context.set_code(
-                grpc.StatusCode.INTERNAL
-            )
-            context.set_details(
-                "Failed to check inventory"
-            )
+        except ValueError as error:
+            db.rollback()
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(error))
+            return inventory_pb2.CheckStockResponse()
 
+        except SQLAlchemyError:
+            db.rollback()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to check inventory")
+            return inventory_pb2.CheckStockResponse()
+
+        except Exception as error:
+            db.rollback()
+            print("Check stock error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to check inventory")
             return inventory_pb2.CheckStockResponse()
 
         finally:
@@ -53,42 +59,42 @@ class InventoryService(
                 db=db,
                 product_id=request.product_id,
                 quantity=request.quantity,
+                reservation_id=request.reservation_id,
             )
 
             if not result["reserved"]:
-                context.set_code(
-                    grpc.StatusCode.FAILED_PRECONDITION
-                )
-                context.set_details(
-                    "Insufficient inventory"
-                )
+                context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+                context.set_details("Insufficient inventory")
 
                 return inventory_pb2.ReserveStockResponse(
                     product_id=result["product_id"],
-                    remaining_quantity=result[
-                        "remaining_quantity"
-                    ],
+                    remaining_quantity=result["remaining_quantity"],
                     reserved=False,
                 )
 
             return inventory_pb2.ReserveStockResponse(
                 product_id=result["product_id"],
-                remaining_quantity=result[
-                    "remaining_quantity"
-                ],
+                remaining_quantity=result["remaining_quantity"],
                 reserved=True,
             )
 
+        except ValueError as error:
+            db.rollback()
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(error))
+            return inventory_pb2.ReserveStockResponse()
+
         except SQLAlchemyError:
             db.rollback()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to reserve inventory")
+            return inventory_pb2.ReserveStockResponse()
 
-            context.set_code(
-                grpc.StatusCode.INTERNAL
-            )
-            context.set_details(
-                "Failed to reserve inventory"
-            )
-
+        except Exception as error:
+            db.rollback()
+            print("Reserve stock error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to reserve inventory")
             return inventory_pb2.ReserveStockResponse()
 
         finally:
@@ -102,36 +108,44 @@ class InventoryService(
                 db=db,
                 product_id=request.product_id,
                 quantity=request.quantity,
+                reservation_id=request.reservation_id,
             )
 
             if not result["released"]:
-                context.set_code(
-                    grpc.StatusCode.NOT_FOUND
-                )
+                context.set_code(grpc.StatusCode.NOT_FOUND)
                 context.set_details(
-                    "Inventory product not found"
+                    "Reservation not found or inventory product missing"
                 )
 
-                return inventory_pb2.ReleaseStockResponse()
+                return inventory_pb2.ReleaseStockResponse(
+                    product_id=result["product_id"],
+                    remaining_quantity=result["remaining_quantity"],
+                    released=False,
+                )
 
             return inventory_pb2.ReleaseStockResponse(
                 product_id=result["product_id"],
-                remaining_quantity=result[
-                    "remaining_quantity"
-                ],
+                remaining_quantity=result["remaining_quantity"],
                 released=True,
             )
 
+        except ValueError as error:
+            db.rollback()
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(error))
+            return inventory_pb2.ReleaseStockResponse()
+
         except SQLAlchemyError:
             db.rollback()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to release inventory")
+            return inventory_pb2.ReleaseStockResponse()
 
-            context.set_code(
-                grpc.StatusCode.INTERNAL
-            )
-            context.set_details(
-                "Failed to release inventory"
-            )
-
+        except Exception as error:
+            db.rollback()
+            print("Release stock error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to release inventory")
             return inventory_pb2.ReleaseStockResponse()
 
         finally:
@@ -139,9 +153,7 @@ class InventoryService(
 
 
 def serve():
-    server = grpc.server(
-        futures.ThreadPoolExecutor(max_workers=10)
-    )
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
 
     inventory_pb2_grpc.add_InventoryServiceServicer_to_server(
         InventoryService(),
@@ -149,13 +161,9 @@ def serve():
     )
 
     server.add_insecure_port("[::]:50052")
-
     server.start()
 
-    print(
-        "FlowMesh Inventory Service gRPC server "
-        "running on port 50052"
-    )
+    print("FlowMesh Inventory Service gRPC server " "running on port 50052")
 
     server.wait_for_termination()
 

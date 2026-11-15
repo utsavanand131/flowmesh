@@ -1,3 +1,4 @@
+
 syntax = "proto3";
 
 package inventory;
@@ -22,6 +23,7 @@ message CheckStockResponse {
 message ReserveStockRequest {
   string product_id = 1;
   int32 quantity = 2;
+  string reservation_id = 3;
 }
 
 message ReserveStockResponse {
@@ -33,6 +35,7 @@ message ReserveStockResponse {
 message ReleaseStockRequest {
   string product_id = 1;
   int32 quantity = 2;
+  string reservation_id = 3;
 }
 
 message ReleaseStockResponse {

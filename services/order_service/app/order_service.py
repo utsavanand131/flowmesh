@@ -1,4 +1,3 @@
-
 import json
 import uuid
 
@@ -28,9 +27,13 @@ class OrderManager:
         if not inventory["available"]:
             return None
 
+        # Generate one ID for this inventory reservation.
+        reservation_id = str(uuid.uuid4())
+
         reservation = reserve_stock(
             product_id=product_id,
             quantity=quantity,
+            reservation_id=reservation_id,
         )
 
         if not reservation["reserved"]:
@@ -74,12 +77,14 @@ class OrderManager:
                 release_stock(
                     product_id=product_id,
                     quantity=quantity,
+                    reservation_id=reservation_id,
                 )
 
             except Exception:
                 print(
                     "CRITICAL: Failed to release inventory "
-                    f"for product {product_id}, "
+                    f"for reservation {reservation_id}, "
+                    f"product {product_id}, "
                     f"quantity {quantity}"
                 )
 
