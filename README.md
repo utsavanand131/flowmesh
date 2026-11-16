@@ -351,7 +351,7 @@ cd C:\projects\flowmesh
 .venv\Scripts\activate
 set PYTHONPATH=C:\projects\flowmesh
 cd services\order_service\app
-python grpc_server.py
+python -m services.order_service.app.grpc_server
 ```
 
 ### Terminal 3 — Inventory gRPC Server
@@ -449,7 +449,7 @@ pytest -v
 The latest verified test result:
 
 ```text
-170 passed, 2 warnings
+203 passed, 2 warnings
 ```
 
 The two warnings are existing deprecation warnings from Starlette/httpx and AnyIO.
