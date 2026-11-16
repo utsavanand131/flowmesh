@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import AppSidebar from "@/components/AppSidebar";
 
 const stats = [
   {
@@ -56,24 +57,6 @@ const recentOrders = [
   },
 ];
 
-const navigation = [
-  {
-    heading: "Operations",
-    items: [
-      { label: "Dashboard", icon: "▦" },
-      { label: "Orders", icon: "□" },
-      { label: "Deliveries", icon: "↗" },
-    ],
-  },
-  {
-    heading: "System",
-    items: [
-      { label: "Services", icon: "◈" },
-      { label: "Event Stream", icon: "≋" },
-    ],
-  },
-];
-
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     DELIVERED: "bg-success/10 text-success",
@@ -109,72 +92,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  return (
-    <>
-      <div className="border-b border-border px-5 py-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10 text-xl font-semibold text-accent">
-            F
-          </div>
-
-          <div>
-            <div className="text-lg font-semibold tracking-tight text-foreground">
-              FlowMesh
-            </div>
-            <div className="mt-0.5 text-xs text-muted">
-              Distributed Order System
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <nav className="flex-1 px-3 py-6">
-        {navigation.map((group) => (
-          <div key={group.heading} className="mb-8">
-            <div className="mb-3 px-3 text-xs font-medium text-muted">
-              {group.heading}
-            </div>
-
-            <div className="space-y-1">
-              {group.items.map((item) => {
-                const active = item.label === "Dashboard";
-
-                return (
-                  <button
-                    key={item.label}
-                    onClick={onNavigate}
-                    className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition ${
-                      active
-                        ? "bg-accent/10 font-medium text-accent"
-                        : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-                    }`}
-                  >
-                    <span className="w-5 text-center text-base">
-                      {item.icon}
-                    </span>
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      <div className="border-t border-border px-5 py-5">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="h-2 w-2 rounded-full bg-success" />
-          System status
-          <span className="ml-auto text-success">Online</span>
-        </div>
-
-        <div className="mt-2 text-xs text-muted">FlowMesh v1.0.0</div>
-      </div>
-    </>
-  );
-}
-
 export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -183,7 +100,7 @@ export default function Home() {
       <div className="flex min-h-screen">
         {/* Desktop Sidebar */}
         <aside className="hidden w-60 shrink-0 border-r border-border bg-surface lg:flex lg:flex-col">
-          <SidebarContent />
+          <AppSidebar activeItem="Dashboard" />
         </aside>
 
         {/* Mobile Navigation */}
@@ -204,7 +121,10 @@ export default function Home() {
                 ×
               </button>
 
-              <SidebarContent onNavigate={() => setMobileMenuOpen(false)} />
+              <AppSidebar
+                activeItem="Dashboard"
+                onNavigate={() => setMobileMenuOpen(false)}
+              />
             </aside>
           </div>
         )}
@@ -224,7 +144,6 @@ export default function Home() {
 
               <div>
                 <p className="text-xs text-muted">Operations</p>
-
                 <h1 className="mt-0.5 text-lg font-semibold tracking-tight sm:text-xl">
                   Dashboard
                 </h1>
@@ -261,7 +180,6 @@ export default function Home() {
             <section>
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-sm font-semibold">System metrics</h2>
-
                 <span className="text-xs text-muted">Last 24 hours</span>
               </div>
 
@@ -296,15 +214,17 @@ export default function Home() {
               <div className="flex flex-col justify-between gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:px-5">
                 <div>
                   <h2 className="text-sm font-semibold">Recent orders</h2>
-
                   <p className="mt-1 text-xs text-muted">
                     Latest activity across the order pipeline.
                   </p>
                 </div>
 
-                <button className="self-start text-xs font-medium text-accent transition hover:text-accent-hover sm:self-auto">
+                <a
+                  href="/orders"
+                  className="self-start text-xs font-medium text-accent transition hover:text-accent-hover sm:self-auto"
+                >
                   View all orders →
-                </button>
+                </a>
               </div>
 
               {/* Mobile Order Cards */}
@@ -314,7 +234,6 @@ export default function Home() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-xs text-muted">Order ID</p>
-
                         <p className="mt-1 text-sm font-medium">{order.id}</p>
                       </div>
 
@@ -324,7 +243,6 @@ export default function Home() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-xs text-muted">Product</p>
-
                         <p className="mt-1 text-sm text-muted-foreground">
                           {order.product}
                         </p>
@@ -332,7 +250,6 @@ export default function Home() {
 
                       <div>
                         <p className="mb-1 text-xs text-muted">Delivery</p>
-
                         <StatusBadge status={order.delivery} />
                       </div>
                     </div>
@@ -346,11 +263,8 @@ export default function Home() {
                   <thead>
                     <tr className="border-b border-border text-xs text-muted">
                       <th className="px-5 py-3 font-medium">Order ID</th>
-
                       <th className="px-5 py-3 font-medium">Product</th>
-
                       <th className="px-5 py-3 font-medium">Order status</th>
-
                       <th className="px-5 py-3 font-medium">Delivery</th>
                     </tr>
                   </thead>

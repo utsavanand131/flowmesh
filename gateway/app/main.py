@@ -1,6 +1,8 @@
 import grpc
 
 from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi.middleware.cors import CORSMiddleware
+
 from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 
@@ -34,6 +36,17 @@ app = FastAPI(
     title="FlowMesh API Gateway",
     version="1.0.0",
 )
+
+
+# CORS configuration for Next.js frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 app.include_router(auth_router)
 
@@ -110,7 +123,6 @@ def create_order(
     current_user=Depends(require_current_user),
 ):
     channel = grpc.insecure_channel("localhost:50051")
-
     stub = order_pb2_grpc.OrderServiceStub(channel)
 
     grpc_request = order_pb2.CreateOrderRequest(
@@ -171,7 +183,6 @@ def list_orders(
     current_user=Depends(require_current_user),
 ):
     channel = grpc.insecure_channel("localhost:50051")
-
     stub = order_pb2_grpc.OrderServiceStub(channel)
 
     # Admins can retrieve all orders.
@@ -244,7 +255,6 @@ def get_order(
     current_user=Depends(require_current_user),
 ):
     channel = grpc.insecure_channel("localhost:50051")
-
     stub = order_pb2_grpc.OrderServiceStub(channel)
 
     grpc_request = order_pb2.GetOrderRequest(
@@ -328,7 +338,6 @@ def update_delivery_status(
         )
 
     channel = grpc.insecure_channel("localhost:50053")
-
     stub = delivery_pb2_grpc.DeliveryServiceStub(channel)
 
     grpc_request = delivery_pb2.UpdateDeliveryStatusRequest(
