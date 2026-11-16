@@ -4,24 +4,28 @@ import { useState } from "react";
 
 const stats = [
   {
-    label: "TOTAL ORDERS",
+    label: "Total orders",
     value: "24",
-    detail: "LAST 24 HOURS",
+    detail: "Last 24 hours",
+    icon: "▤",
   },
   {
-    label: "PENDING",
+    label: "Pending",
     value: "03",
-    detail: "AWAITING PROCESSING",
+    detail: "Awaiting processing",
+    icon: "◷",
   },
   {
-    label: "IN DELIVERY",
+    label: "In delivery",
     value: "05",
-    detail: "ACTIVE DELIVERIES",
+    detail: "Active deliveries",
+    icon: "↗",
   },
   {
-    label: "DELIVERED",
+    label: "Delivered",
     value: "16",
-    detail: "COMPLETED ORDERS",
+    detail: "Completed orders",
+    icon: "✓",
   },
 ];
 
@@ -52,22 +56,55 @@ const recentOrders = [
   },
 ];
 
+const navigation = [
+  {
+    heading: "Operations",
+    items: [
+      { label: "Dashboard", icon: "▦" },
+      { label: "Orders", icon: "□" },
+      { label: "Deliveries", icon: "↗" },
+    ],
+  },
+  {
+    heading: "System",
+    items: [
+      { label: "Services", icon: "◈" },
+      { label: "Event Stream", icon: "≋" },
+    ],
+  },
+];
+
 function StatusBadge({ status }: { status: string }) {
-  const statusClass =
-    status === "DELIVERED"
-      ? "border-success/40 text-success"
-      : status === "IN_TRANSIT"
-        ? "border-accent/40 text-accent"
-        : status === "CONFIRMED"
-          ? "border-warning/40 text-warning"
-          : "border-muted/40 text-muted";
+  const styles: Record<string, string> = {
+    DELIVERED: "bg-success/10 text-success",
+    IN_TRANSIT: "bg-accent/10 text-accent",
+    CONFIRMED: "bg-warning/10 text-warning",
+    ASSIGNED: "bg-surface-hover text-muted-foreground",
+    PROCESSING: "bg-surface-hover text-muted-foreground",
+    PENDING: "bg-surface-hover text-muted-foreground",
+  };
+
+  const dotStyles: Record<string, string> = {
+    DELIVERED: "bg-success",
+    IN_TRANSIT: "bg-accent",
+    CONFIRMED: "bg-warning",
+    ASSIGNED: "bg-muted",
+    PROCESSING: "bg-muted",
+    PENDING: "bg-muted",
+  };
 
   return (
     <span
-      className={`inline-flex items-center gap-2 border px-2.5 py-1 text-xs tracking-wider ${statusClass}`}
+      className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${
+        styles[status] ?? "bg-surface-hover text-muted"
+      }`}
     >
-      <span>●</span>
-      {status}
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${
+          dotStyles[status] ?? "bg-muted"
+        }`}
+      />
+      {status.replaceAll("_", " ")}
     </span>
   );
 }
@@ -75,79 +112,64 @@ function StatusBadge({ status }: { status: string }) {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <>
-      <div className="border-b border-border px-6 py-6">
-        <div className="text-xl font-bold tracking-[0.2em] text-accent">
-          FLOWMESH
-        </div>
+      <div className="border-b border-border px-5 py-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10 text-xl font-semibold text-accent">
+            F
+          </div>
 
-        <div className="mt-2 text-xs tracking-wider text-muted">
-          DISTRIBUTED ORDER SYSTEM
+          <div>
+            <div className="text-lg font-semibold tracking-tight text-foreground">
+              FlowMesh
+            </div>
+            <div className="mt-0.5 text-xs text-muted">
+              Distributed Order System
+            </div>
+          </div>
         </div>
       </div>
 
       <nav className="flex-1 px-3 py-6">
-        <div className="mb-3 px-3 text-[10px] tracking-[0.2em] text-muted">
-          OPERATIONS
-        </div>
+        {navigation.map((group) => (
+          <div key={group.heading} className="mb-8">
+            <div className="mb-3 px-3 text-xs font-medium text-muted">
+              {group.heading}
+            </div>
 
-        <div className="space-y-1">
-          <button
-            onClick={onNavigate}
-            className="flex w-full items-center gap-3 border border-accent/30 bg-accent/10 px-3 py-3 text-left text-sm text-accent"
-          >
-            <span>▣</span>
-            DASHBOARD
-          </button>
+            <div className="space-y-1">
+              {group.items.map((item) => {
+                const active = item.label === "Dashboard";
 
-          <button
-            onClick={onNavigate}
-            className="flex w-full items-center gap-3 px-3 py-3 text-left text-sm text-muted transition hover:bg-surface-hover hover:text-foreground"
-          >
-            <span>□</span>
-            ORDERS
-          </button>
-
-          <button
-            onClick={onNavigate}
-            className="flex w-full items-center gap-3 px-3 py-3 text-left text-sm text-muted transition hover:bg-surface-hover hover:text-foreground"
-          >
-            <span>↗</span>
-            DELIVERIES
-          </button>
-        </div>
-
-        <div className="mb-3 mt-8 px-3 text-[10px] tracking-[0.2em] text-muted">
-          SYSTEM
-        </div>
-
-        <div className="space-y-1">
-          <button
-            onClick={onNavigate}
-            className="flex w-full items-center gap-3 px-3 py-3 text-left text-sm text-muted transition hover:bg-surface-hover hover:text-foreground"
-          >
-            <span>◉</span>
-            SERVICES
-          </button>
-
-          <button
-            onClick={onNavigate}
-            className="flex w-full items-center gap-3 px-3 py-3 text-left text-sm text-muted transition hover:bg-surface-hover hover:text-foreground"
-          >
-            <span>≋</span>
-            EVENT STREAM
-          </button>
-        </div>
+                return (
+                  <button
+                    key={item.label}
+                    onClick={onNavigate}
+                    className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition ${
+                      active
+                        ? "bg-accent/10 font-medium text-accent"
+                        : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                    }`}
+                  >
+                    <span className="w-5 text-center text-base">
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      <div className="border-t border-border px-6 py-5">
-        <div className="flex items-center gap-2 text-xs text-success">
-          <span>●</span>
-          SYSTEM ONLINE
+      <div className="border-t border-border px-5 py-5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="h-2 w-2 rounded-full bg-success" />
+          System status
+          <span className="ml-auto text-success">Online</span>
         </div>
 
-        <div className="mt-2 text-[10px] tracking-wider text-muted">
-          FLOWMESH v1.0.0
-        </div>
+        <div className="mt-2 text-xs text-muted">FlowMesh v1.0.0</div>
       </div>
     </>
   );
@@ -160,16 +182,16 @@ export default function Home() {
     <main className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen">
         {/* Desktop Sidebar */}
-        <aside className="hidden w-64 shrink-0 border-r border-border bg-surface lg:flex lg:flex-col">
+        <aside className="hidden w-60 shrink-0 border-r border-border bg-surface lg:flex lg:flex-col">
           <SidebarContent />
         </aside>
 
-        {/* Mobile Menu Overlay */}
+        {/* Mobile Navigation */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-50 lg:hidden">
             <button
               aria-label="Close navigation menu"
-              className="absolute inset-0 cursor-default bg-black/70"
+              className="absolute inset-0 bg-black/60"
               onClick={() => setMobileMenuOpen(false)}
             />
 
@@ -177,7 +199,7 @@ export default function Home() {
               <button
                 onClick={() => setMobileMenuOpen(false)}
                 aria-label="Close menu"
-                className="absolute right-4 top-5 z-10 flex h-9 w-9 items-center justify-center border border-border text-lg text-muted transition hover:border-accent hover:text-accent"
+                className="absolute right-4 top-5 z-10 flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-surface-hover"
               >
                 ×
               </button>
@@ -189,131 +211,99 @@ export default function Home() {
 
         {/* Main Content */}
         <section className="min-w-0 flex-1">
-          {/* Mobile Top Bar */}
-          <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-4 lg:hidden">
-            <div>
-              <div className="text-base font-bold tracking-[0.2em] text-accent">
-                FLOWMESH
-              </div>
-
-              <div className="mt-1 text-[9px] tracking-wider text-muted">
-                DISTRIBUTED ORDER SYSTEM
-              </div>
-            </div>
-
-            <button
-              onClick={() => setMobileMenuOpen(true)}
-              aria-label="Open navigation menu"
-              className="flex h-10 w-10 flex-col items-center justify-center gap-1.5 border border-border transition hover:border-accent"
-            >
-              <span className="block h-px w-5 bg-foreground" />
-              <span className="block h-px w-5 bg-foreground" />
-              <span className="block h-px w-5 bg-foreground" />
-            </button>
-          </div>
-
           {/* Header */}
-          <header className="border-b border-border bg-surface px-4 py-5 sm:px-6 lg:px-8">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/95 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Open navigation menu"
+                className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-lg text-muted-foreground hover:bg-surface-hover lg:hidden"
+              >
+                ☰
+              </button>
+
               <div>
-                <div className="text-[10px] tracking-[0.2em] text-muted sm:text-xs">
-                  OPERATIONS CONSOLE
-                </div>
+                <p className="text-xs text-muted">Operations</p>
 
-                <h1 className="mt-1 text-xl font-bold tracking-tight sm:text-2xl">
-                  SYSTEM DASHBOARD
+                <h1 className="mt-0.5 text-lg font-semibold tracking-tight sm:text-xl">
+                  Dashboard
                 </h1>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div className="border border-border px-3 py-2 text-[10px] text-muted sm:px-4 sm:text-xs">
-                  API GATEWAY
-                  <span className="ml-2 text-success">● ONLINE</span>
-                </div>
-
-                <div className="border border-border px-3 py-2 text-[10px] text-muted sm:px-4 sm:text-xs">
-                  REDIS
-                  <span className="ml-2 text-success">● ONLINE</span>
-                </div>
               </div>
             </div>
           </header>
 
-          {/* Dashboard */}
-          <div className="space-y-7 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-            {/* Intro */}
-            <div className="border border-border bg-surface p-4 sm:p-6">
-              <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
-                <div>
-                  <div className="text-[10px] tracking-[0.2em] text-accent sm:text-xs">
-                    FLOWMESH / CONTROL
-                  </div>
+          {/* Dashboard Content */}
+          <div className="mx-auto max-w-[1600px] space-y-8 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+            {/* Welcome Section */}
+            <section className="flex flex-col justify-between gap-5 border-b border-border pb-7 sm:flex-row sm:items-center">
+              <div>
+                <p className="text-sm font-medium text-accent">
+                  FlowMesh / Overview
+                </p>
 
-                  <h2 className="mt-2 text-lg font-semibold sm:text-xl">
-                    Order & Delivery Operations
-                  </h2>
-
-                  <p className="mt-2 max-w-2xl text-xs leading-6 text-muted sm:text-sm">
-                    Monitor orders, inventory reservations, delivery workflows,
-                    and distributed service events from one operations console.
-                  </p>
-                </div>
-
-                <button className="w-full border border-accent bg-accent px-5 py-3 text-sm font-semibold tracking-wider text-black transition hover:bg-accent-hover md:w-auto">
-                  + CREATE ORDER
-                </button>
-              </div>
-            </div>
-
-            {/* Stats */}
-            <section>
-              <div className="mb-4 flex items-end justify-between gap-4">
-                <h2 className="text-xs font-semibold tracking-[0.15em] sm:text-sm">
-                  SYSTEM METRICS
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                  Order & Delivery Operations
                 </h2>
 
-                <span className="text-right text-[9px] tracking-wider text-muted sm:text-[10px]">
-                  LAST 24 HOURS
-                </span>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                  Monitor orders, inventory reservations, delivery workflows,
+                  and distributed service events from one operations console.
+                </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+              <button className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-[#101614] transition hover:bg-accent-hover">
+                <span className="text-lg leading-none">+</span>
+                Create order
+              </button>
+            </section>
+
+            {/* System Metrics */}
+            <section>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold">System metrics</h2>
+
+                <span className="text-xs text-muted">Last 24 hours</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {stats.map((stat) => (
                   <div
                     key={stat.label}
-                    className="min-w-0 border border-border bg-surface p-4 sm:p-5"
+                    className="rounded-lg border border-border bg-surface p-4 sm:p-5"
                   >
-                    <div className="truncate text-[9px] tracking-[0.14em] text-muted sm:text-[10px] sm:tracking-[0.18em]">
-                      {stat.label}
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {stat.label}
+                      </p>
+
+                      <span className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-hover text-base text-accent">
+                        {stat.icon}
+                      </span>
                     </div>
 
-                    <div className="mt-3 text-2xl font-bold tracking-tight sm:mt-4 sm:text-3xl">
+                    <p className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
                       {stat.value}
-                    </div>
+                    </p>
 
-                    <div className="mt-2 hidden text-[10px] tracking-wider text-muted sm:block">
-                      {stat.detail}
-                    </div>
+                    <p className="mt-1.5 text-xs text-muted">{stat.detail}</p>
                   </div>
                 ))}
               </div>
             </section>
 
             {/* Recent Orders */}
-            <section className="border border-border bg-surface">
-              <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-5">
+            <section className="overflow-hidden rounded-lg border border-border bg-surface">
+              <div className="flex flex-col justify-between gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:px-5">
                 <div>
-                  <h2 className="text-xs font-semibold tracking-[0.15em] sm:text-sm">
-                    RECENT ORDERS
-                  </h2>
+                  <h2 className="text-sm font-semibold">Recent orders</h2>
 
-                  <p className="mt-1 text-[10px] text-muted sm:text-xs">
+                  <p className="mt-1 text-xs text-muted">
                     Latest activity across the order pipeline.
                   </p>
                 </div>
 
-                <button className="self-start text-[10px] tracking-wider text-accent hover:text-accent-hover sm:self-auto sm:text-xs">
-                  VIEW ALL →
+                <button className="self-start text-xs font-medium text-accent transition hover:text-accent-hover sm:self-auto">
+                  View all orders →
                 </button>
               </div>
 
@@ -321,13 +311,11 @@ export default function Home() {
               <div className="divide-y divide-border md:hidden">
                 {recentOrders.map((order) => (
                   <div key={order.id} className="space-y-4 p-4">
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-[9px] tracking-wider text-muted">
-                          ORDER ID
-                        </div>
+                        <p className="text-xs text-muted">Order ID</p>
 
-                        <div className="mt-1 text-xs">{order.id}</div>
+                        <p className="mt-1 text-sm font-medium">{order.id}</p>
                       </div>
 
                       <StatusBadge status={order.status} />
@@ -335,17 +323,15 @@ export default function Home() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <div className="text-[9px] tracking-wider text-muted">
-                          PRODUCT
-                        </div>
+                        <p className="text-xs text-muted">Product</p>
 
-                        <div className="mt-1 text-xs">{order.product}</div>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {order.product}
+                        </p>
                       </div>
 
                       <div>
-                        <div className="mb-1 text-[9px] tracking-wider text-muted">
-                          DELIVERY
-                        </div>
+                        <p className="mb-1 text-xs text-muted">Delivery</p>
 
                         <StatusBadge status={order.delivery} />
                       </div>
@@ -354,18 +340,18 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* Desktop Table */}
+              {/* Desktop Orders Table */}
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[700px] text-left">
+                <table className="w-full text-left">
                   <thead>
-                    <tr className="border-b border-border text-[10px] tracking-[0.15em] text-muted">
-                      <th className="px-5 py-4 font-normal">ORDER ID</th>
+                    <tr className="border-b border-border text-xs text-muted">
+                      <th className="px-5 py-3 font-medium">Order ID</th>
 
-                      <th className="px-5 py-4 font-normal">PRODUCT</th>
+                      <th className="px-5 py-3 font-medium">Product</th>
 
-                      <th className="px-5 py-4 font-normal">ORDER STATUS</th>
+                      <th className="px-5 py-3 font-medium">Order status</th>
 
-                      <th className="px-5 py-4 font-normal">DELIVERY</th>
+                      <th className="px-5 py-3 font-medium">Delivery</th>
                     </tr>
                   </thead>
 
@@ -373,82 +359,27 @@ export default function Home() {
                     {recentOrders.map((order) => (
                       <tr
                         key={order.id}
-                        className="border-b border-border last:border-b-0 transition hover:bg-surface-hover"
+                        className="border-b border-border last:border-0 transition hover:bg-surface-hover"
                       >
-                        <td className="px-5 py-5 text-sm">{order.id}</td>
+                        <td className="px-5 py-4 text-sm font-medium">
+                          {order.id}
+                        </td>
 
-                        <td className="px-5 py-5 text-sm text-muted">
+                        <td className="px-5 py-4 text-sm text-muted-foreground">
                           {order.product}
                         </td>
 
-                        <td className="px-5 py-5">
+                        <td className="px-5 py-4">
                           <StatusBadge status={order.status} />
                         </td>
 
-                        <td className="px-5 py-5">
+                        <td className="px-5 py-4">
                           <StatusBadge status={order.delivery} />
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
-            </section>
-
-            {/* Architecture */}
-            <section>
-              <div className="mb-4">
-                <h2 className="text-xs font-semibold tracking-[0.15em] sm:text-sm">
-                  SERVICE TOPOLOGY
-                </h2>
-
-                <p className="mt-1 text-[10px] text-muted sm:text-xs">
-                  Current FlowMesh communication architecture.
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:gap-4 md:grid-cols-3">
-                <div className="border border-border bg-surface p-4 sm:p-5">
-                  <div className="text-[10px] tracking-[0.18em] text-accent">
-                    HTTP
-                  </div>
-
-                  <div className="mt-3 font-semibold">API GATEWAY</div>
-
-                  <div className="mt-2 text-xs leading-5 text-muted">
-                    FastAPI
-                    <br />
-                    Port 8000
-                  </div>
-                </div>
-
-                <div className="border border-border bg-surface p-4 sm:p-5">
-                  <div className="text-[10px] tracking-[0.18em] text-accent">
-                    gRPC
-                  </div>
-
-                  <div className="mt-3 font-semibold">MICROSERVICES</div>
-
-                  <div className="mt-2 text-xs leading-5 text-muted">
-                    Order · Inventory · Delivery
-                    <br />
-                    Internal communication
-                  </div>
-                </div>
-
-                <div className="border border-border bg-surface p-4 sm:p-5">
-                  <div className="text-[10px] tracking-[0.18em] text-accent">
-                    EVENTS
-                  </div>
-
-                  <div className="mt-3 font-semibold">REDIS STREAMS</div>
-
-                  <div className="mt-2 text-xs leading-5 text-muted">
-                    Transactional outbox
-                    <br />
-                    Event-driven workflows
-                  </div>
-                </div>
               </div>
             </section>
           </div>
