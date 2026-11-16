@@ -1,6 +1,7 @@
 import json
 import uuid
 
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -114,6 +115,47 @@ class OrderManager:
         return {
             "order": order,
             "delivery": delivery,
+        }
+
+    def list_orders(
+        self,
+        db: Session,
+        user_id: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ):
+        query = select(Order)
+
+        if user_id is not None:
+            query = query.where(Order.user_id == user_id)
+
+        total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+
+        orders = db.scalars(
+            query.order_by(Order.order_id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).all()
+
+        results = []
+
+        for order in orders:
+            delivery = get_delivery_by_order(
+                order_id=order.order_id,
+            )
+
+            results.append(
+                {
+                    "order": order,
+                    "delivery": delivery,
+                }
+            )
+
+        return {
+            "orders": results,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
         }
 
     def update_order_status(

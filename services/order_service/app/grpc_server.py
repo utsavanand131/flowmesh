@@ -1,15 +1,12 @@
-
 from concurrent import futures
 
 import grpc
 from sqlalchemy.exc import SQLAlchemyError
 
-import order_pb2
-import order_pb2_grpc
-
+from . import order_pb2
+from . import order_pb2_grpc
 from services.order_service.app.database import SessionLocal
 from services.order_service.app.order_service import OrderManager
-
 
 order_manager = OrderManager()
 
@@ -27,9 +24,7 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
             )
 
             if result is None:
-                context.set_code(
-                    grpc.StatusCode.FAILED_PRECONDITION
-                )
+                context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
                 context.set_details("Insufficient inventory")
                 return order_pb2.CreateOrderResponse()
 
@@ -115,11 +110,59 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
         finally:
             db.close()
 
+    def ListOrders(self, request, context):
+        db = SessionLocal()
+
+        try:
+            result = order_manager.list_orders(
+                db=db,
+                user_id=request.user_id or None,
+                page=request.page or 1,
+                page_size=request.page_size or 20,
+            )
+
+            response = order_pb2.ListOrdersResponse(
+                total=result["total"],
+                page=result["page"],
+                page_size=result["page_size"],
+            )
+
+            for item in result["orders"]:
+                order = item["order"]
+                delivery = item["delivery"]
+
+                order_item = response.orders.add(
+                    order_id=order.order_id,
+                    user_id=order.user_id,
+                    product_id=order.product_id,
+                    quantity=order.quantity,
+                    status=order.status,
+                )
+
+                if delivery is not None:
+                    order_item.delivery_id = delivery["delivery_id"]
+                    order_item.delivery_status = delivery["status"]
+
+            return response
+
+        except SQLAlchemyError:
+            db.rollback()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve orders")
+            return order_pb2.ListOrdersResponse()
+
+        except Exception as error:
+            print("List orders error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve orders")
+            return order_pb2.ListOrdersResponse()
+
+        finally:
+            db.close()
+
 
 def serve():
-    server = grpc.server(
-        futures.ThreadPoolExecutor(max_workers=10)
-    )
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
 
     order_pb2_grpc.add_OrderServiceServicer_to_server(
         OrderService(),

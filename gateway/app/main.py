@@ -1,7 +1,6 @@
-
 import grpc
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 
@@ -30,7 +29,6 @@ from .auth_routes import (
     require_current_user,
     require_admin_user,
 )
-
 
 app = FastAPI(
     title="FlowMesh API Gateway",
@@ -163,6 +161,80 @@ def create_order(
         "order_id": response.order_id,
         "status": response.status,
         "delivery": delivery,
+    }
+
+
+@app.get("/orders")
+def list_orders(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    current_user=Depends(require_current_user),
+):
+    channel = grpc.insecure_channel("localhost:50051")
+
+    stub = order_pb2_grpc.OrderServiceStub(channel)
+
+    # Admins can retrieve all orders.
+    # Customers can retrieve only their own orders.
+    user_id = "" if current_user.role == "ADMIN" else current_user.id
+
+    grpc_request = order_pb2.ListOrdersRequest(
+        user_id=user_id,
+        page=page,
+        page_size=page_size,
+    )
+
+    try:
+        response = stub.ListOrders(grpc_request)
+
+    except grpc.RpcError as error:
+        print(
+            "Order Service gRPC error:",
+            error.code(),
+            error.details(),
+        )
+
+        if error.code() == grpc.StatusCode.UNAVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Order service unavailable",
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve orders",
+        )
+
+    finally:
+        channel.close()
+
+    orders = []
+
+    for order in response.orders:
+        delivery = None
+
+        if order.delivery_id:
+            delivery = {
+                "delivery_id": order.delivery_id,
+                "status": order.delivery_status,
+            }
+
+        orders.append(
+            {
+                "order_id": order.order_id,
+                "user_id": order.user_id,
+                "product_id": order.product_id,
+                "quantity": order.quantity,
+                "status": order.status,
+                "delivery": delivery,
+            }
+        )
+
+    return {
+        "orders": orders,
+        "total": response.total,
+        "page": response.page,
+        "page_size": response.page_size,
     }
 
 
