@@ -1,11 +1,144 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AppSidebar from "@/components/AppSidebar";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const PAGE_SIZE = 10;
+
+interface Order {
+  order_id: string;
+  user_id?: string;
+  product_id: string;
+  quantity: number;
+  status: string;
+  delivery?: {
+    delivery_id?: string;
+    status?: string;
+  } | null;
+}
+
+interface OrdersResponse {
+  orders: Order[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+function formatStatus(status?: string) {
+  if (!status) return "N/A";
+
+  return status
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function StatusBadge({ status }: { status?: string }) {
+  const normalizedStatus = status?.toUpperCase() ?? "";
+
+  let styles = "border-border bg-surface-muted text-muted-foreground";
+
+  if (
+    ["DELIVERED", "COMPLETED", "CONFIRMED", "SUCCESS"].includes(
+      normalizedStatus,
+    )
+  ) {
+    styles = "border-success/20 bg-success/10 text-success";
+  } else if (
+    ["PENDING", "PROCESSING", "ASSIGNED", "IN_TRANSIT"].includes(
+      normalizedStatus,
+    )
+  ) {
+    styles = "border-warning/20 bg-warning/10 text-warning";
+  } else if (["CANCELLED", "FAILED", "REJECTED"].includes(normalizedStatus)) {
+    styles = "border-danger/20 bg-danger/10 text-danger";
+  }
+
+  return (
+    <span
+      className={`inline-flex whitespace-nowrap rounded-md border px-2.5 py-1 text-xs font-medium ${styles}`}
+    >
+      {formatStatus(status)}
+    </span>
+  );
+}
+
 export default function OrdersPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const fetchOrders = useCallback(
+    async (signal: AbortSignal) => {
+      if (!API_URL) {
+        setError(
+          "API URL is not configured. Check your frontend environment variables.",
+        );
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError("");
+
+      try {
+        const response = await fetch(
+          `${API_URL}/orders?page=${page}&page_size=${PAGE_SIZE}`,
+          {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              Accept: "application/json",
+            },
+            signal,
+          },
+        );
+
+        if (!response.ok) {
+          let message = "Unable to load orders.";
+
+          try {
+            const data = await response.json();
+            message = data.detail || data.message || message;
+          } catch {
+            // Keep the default error message.
+          }
+
+          throw new Error(message);
+        }
+
+        const data: OrdersResponse = await response.json();
+
+        setOrders(data.orders ?? []);
+        setTotal(data.total ?? 0);
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+      } finally {
+        if (!signal.aborted) {
+          setLoading(false);
+        }
+      }
+    },
+    [page],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetchOrders(controller.signal);
+
+    return () => controller.abort();
+  }, [fetchOrders, refreshKey]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <ProtectedRoute>
@@ -64,27 +197,180 @@ export default function OrdersPage() {
 
             {/* Orders Content */}
             <div className="mx-auto max-w-[1600px] space-y-8 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-              <section className="border-b border-border pb-7">
-                <p className="text-sm font-medium text-accent">
-                  FlowMesh / Operations
-                </p>
+              <section className="flex flex-col justify-between gap-4 border-b border-border pb-7 sm:flex-row sm:items-end">
+                <div>
+                  <p className="text-sm font-medium text-accent">
+                    FlowMesh / Operations
+                  </p>
 
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                  Order Management
-                </h2>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                    Order Management
+                  </h2>
 
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  Track orders, monitor processing status, and follow delivery
-                  progress across the order pipeline.
-                </p>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    Track orders, monitor processing status, and follow delivery
+                    progress across the order pipeline.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setRefreshKey((current) => current + 1)}
+                  disabled={loading}
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-surface px-4 text-sm font-medium text-foreground transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span>{loading ? "Loading..." : "↻ Refresh"}</span>
+                </button>
               </section>
 
-              <section className="rounded-lg border border-border bg-surface p-6">
-                <h3 className="text-sm font-semibold">Orders workspace</h3>
+              {/* Order Summary */}
+              <section className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-lg border border-border bg-surface p-5">
+                  <p className="text-sm text-muted-foreground">Total Orders</p>
+                  <p className="mt-2 text-3xl font-semibold tracking-tight">
+                    {loading ? "—" : total}
+                  </p>
+                </div>
 
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Your order management interface will appear here.
-                </p>
+                <div className="rounded-lg border border-border bg-surface p-5">
+                  <p className="text-sm text-muted-foreground">
+                    Orders on This Page
+                  </p>
+                  <p className="mt-2 text-3xl font-semibold tracking-tight">
+                    {loading ? "—" : orders.length}
+                  </p>
+                </div>
+              </section>
+
+              {/* Orders Table */}
+              <section className="overflow-hidden rounded-lg border border-border bg-surface">
+                <div className="flex flex-col gap-1 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold">Orders Workspace</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Live order data from the FlowMesh API
+                    </p>
+                  </div>
+
+                  <span className="text-xs text-muted-foreground">
+                    {loading ? "Fetching orders..." : `${total} total records`}
+                  </span>
+                </div>
+
+                {error && (
+                  <div className="m-5 rounded-md border border-danger/20 bg-danger/10 p-4">
+                    <p className="text-sm font-medium text-danger">
+                      Could not load orders
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {error}
+                    </p>
+                    <button
+                      onClick={() => setRefreshKey((current) => current + 1)}
+                      className="mt-3 text-sm font-medium text-accent hover:underline"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                )}
+
+                {!error && loading && (
+                  <div className="space-y-3 p-5">
+                    {[1, 2, 3, 4].map((item) => (
+                      <div
+                        key={item}
+                        className="h-12 animate-pulse rounded-md bg-surface-muted"
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {!error && !loading && orders.length === 0 && (
+                  <div className="px-5 py-16 text-center">
+                    <p className="text-sm font-medium">No orders found</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Orders will appear here when they are created.
+                    </p>
+                  </div>
+                )}
+
+                {!error && !loading && orders.length > 0 && (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[850px] text-left text-sm">
+                        <thead className="border-b border-border bg-surface-muted/50">
+                          <tr className="text-xs text-muted-foreground">
+                            <th className="px-5 py-3 font-medium">Order ID</th>
+                            <th className="px-5 py-3 font-medium">
+                              Product ID
+                            </th>
+                            <th className="px-5 py-3 font-medium">Quantity</th>
+                            <th className="px-5 py-3 font-medium">
+                              Order Status
+                            </th>
+                            <th className="px-5 py-3 font-medium">
+                              Delivery Status
+                            </th>
+                          </tr>
+                        </thead>
+
+                        <tbody className="divide-y divide-border">
+                          {orders.map((order) => (
+                            <tr
+                              key={order.order_id}
+                              className="transition hover:bg-surface-hover/50"
+                            >
+                              <td className="px-5 py-4 font-mono text-xs text-accent">
+                                {order.order_id}
+                              </td>
+                              <td className="px-5 py-4 font-mono text-xs text-muted-foreground">
+                                {order.product_id}
+                              </td>
+                              <td className="px-5 py-4 tabular-nums">
+                                {order.quantity}
+                              </td>
+                              <td className="px-5 py-4">
+                                <StatusBadge status={order.status} />
+                              </td>
+                              <td className="px-5 py-4">
+                                <StatusBadge status={order.delivery?.status} />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Showing {(page - 1) * PAGE_SIZE + 1}–
+                        {Math.min(page * PAGE_SIZE, total)} of {total} orders
+                      </p>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setPage((current) => current - 1)}
+                          disabled={page <= 1}
+                          className="rounded-md border border-border px-3 py-2 text-xs font-medium transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Previous
+                        </button>
+
+                        <span className="px-2 text-xs tabular-nums text-muted-foreground">
+                          Page {page} of {totalPages}
+                        </span>
+
+                        <button
+                          onClick={() => setPage((current) => current + 1)}
+                          disabled={page >= totalPages}
+                          className="rounded-md border border-border px-3 py-2 text-xs font-medium transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </section>
             </div>
           </section>
