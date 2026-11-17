@@ -5,12 +5,39 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 
-const navigation = [
+interface NavigationItem {
+  label: string;
+  icon: string;
+  href: string;
+}
+
+interface NavigationGroup {
+  heading: string;
+  items: NavigationItem[];
+}
+
+interface AppSidebarProps {
+  activeItem: string;
+  onNavigate?: () => void;
+}
+
+const customerNavigation: NavigationGroup[] = [
   {
     heading: "Operations",
     items: [
       { label: "Dashboard", icon: "▦", href: "/" },
-      { label: "Orders", icon: "□", href: "/orders" },
+      { label: "My Orders", icon: "□", href: "/orders" },
+      { label: "Deliveries", icon: "↗", href: "#" },
+    ],
+  },
+];
+
+const adminNavigation: NavigationGroup[] = [
+  {
+    heading: "Operations",
+    items: [
+      { label: "Dashboard", icon: "▦", href: "/" },
+      { label: "All Orders", icon: "□", href: "/orders" },
       { label: "Deliveries", icon: "↗", href: "#" },
     ],
   },
@@ -23,20 +50,28 @@ const navigation = [
   },
 ];
 
-interface AppSidebarProps {
-  activeItem: string;
-  onNavigate?: () => void;
-}
-
 export default function AppSidebar({
   activeItem,
   onNavigate,
 }: AppSidebarProps) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
 
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+
+  const isAdmin = user?.role === "ADMIN";
+
+  const navigation = isAdmin ? adminNavigation : customerNavigation;
+
+  const displayName = user?.name?.trim() || "FlowMesh User";
+
+  const initials = displayName
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -66,6 +101,7 @@ export default function AppSidebar({
             <div className="text-lg font-semibold tracking-tight text-foreground">
               FlowMesh
             </div>
+
             <div className="mt-0.5 text-xs text-muted">
               Distributed Order System
             </div>
@@ -73,7 +109,7 @@ export default function AppSidebar({
         </Link>
       </div>
 
-      {/* Navigation */}
+      {/* Role-Based Navigation */}
       <nav className="flex-1 px-3 py-6">
         {navigation.map((group) => (
           <div key={group.heading} className="mb-8">
@@ -99,6 +135,7 @@ export default function AppSidebar({
                     <span className="w-5 text-center text-base">
                       {item.icon}
                     </span>
+
                     {item.label}
                   </Link>
                 );
@@ -107,6 +144,31 @@ export default function AppSidebar({
           </div>
         ))}
       </nav>
+
+      {/* User Profile */}
+      <div className="border-t border-border px-4 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/25 bg-accent/10 text-sm font-semibold text-accent">
+            {initials || "U"}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-foreground">
+              {displayName}
+            </p>
+
+            <p className="truncate text-xs text-muted">
+              {user?.email ?? "No email available"}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <span className="inline-flex rounded-md border border-accent/20 bg-accent/10 px-2 py-1 text-[10px] font-semibold tracking-wide text-accent">
+            {user?.role ?? "USER"}
+          </span>
+        </div>
+      </div>
 
       {/* Logout */}
       <div className="border-t border-border px-3 py-4">
@@ -117,6 +179,7 @@ export default function AppSidebar({
           className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-danger/10 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span className="w-5 text-center text-base">↪</span>
+
           {loggingOut ? "Signing out..." : "Logout"}
         </button>
 
