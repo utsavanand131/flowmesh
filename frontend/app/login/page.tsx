@@ -3,11 +3,13 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refreshUser } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,6 +39,15 @@ export default function LoginPage() {
           typeof data.detail === "string"
             ? data.detail
             : "Unable to sign in. Please check your credentials.",
+        );
+      }
+
+      // Synchronize frontend authentication state with backend session.
+      const authenticatedUser = await refreshUser();
+
+      if (!authenticatedUser) {
+        throw new Error(
+          "Login succeeded, but your session could not be verified. Please try again.",
         );
       }
 

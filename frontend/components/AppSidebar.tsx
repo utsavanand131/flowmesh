@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navigation = [
   {
@@ -29,8 +32,30 @@ export default function AppSidebar({
   activeItem,
   onNavigate,
 }: AppSidebarProps) {
+  const { logout } = useAuth();
+  const router = useRouter();
+
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    setLogoutError("");
+
+    try {
+      await logout();
+      onNavigate?.();
+      router.replace("/login");
+      router.refresh();
+    } catch {
+      setLogoutError("Unable to log out. Please try again.");
+      setLoggingOut(false);
+    }
+  }
+
   return (
     <>
+      {/* Brand */}
       <div className="border-b border-border px-5 py-6">
         <Link href="/" className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10 text-xl font-semibold text-accent">
@@ -48,6 +73,7 @@ export default function AppSidebar({
         </Link>
       </div>
 
+      {/* Navigation */}
       <nav className="flex-1 px-3 py-6">
         {navigation.map((group) => (
           <div key={group.heading} className="mb-8">
@@ -82,6 +108,24 @@ export default function AppSidebar({
         ))}
       </nav>
 
+      {/* Logout */}
+      <div className="border-t border-border px-3 py-4">
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-danger/10 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <span className="w-5 text-center text-base">↪</span>
+          {loggingOut ? "Signing out..." : "Logout"}
+        </button>
+
+        {logoutError && (
+          <p className="mt-2 px-3 text-xs text-danger">{logoutError}</p>
+        )}
+      </div>
+
+      {/* System Status */}
       <div className="border-t border-border px-5 py-5">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="h-2 w-2 rounded-full bg-success" />
