@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
-
 # Add project root to Python path
 PROJECT_ROOT = os.path.abspath(
     os.path.join(
@@ -23,20 +22,6 @@ sys.path.insert(
 )
 
 
-# Add Order Service app directory to Python path
-ORDER_SERVICE_APP = os.path.join(
-    PROJECT_ROOT,
-    "services",
-    "order_service",
-    "app",
-)
-
-sys.path.insert(
-    0,
-    ORDER_SERVICE_APP,
-)
-
-
 # Load environment variables
 load_dotenv()
 
@@ -47,19 +32,18 @@ config = context.config
 
 # Configure Python logging
 if config.config_file_name is not None:
-    fileConfig(
-        config.config_file_name
-    )
+    fileConfig(config.config_file_name)
 
 
-# Import the SAME database module used by the existing models
-from database import Base
-import models
+# Import the SAME database module used by all models
+from services.order_service.app.database import Base
+
+# Import existing Order Service models
+from services.order_service.app import models
 
 # Import authentication models so Alembic
 # registers them with Base.metadata
 from gateway.app.auth_models import User, OAuthAccount
-
 
 target_metadata = Base.metadata
 
@@ -92,17 +76,13 @@ def include_object(
 def run_migrations_offline() -> None:
     """Run migrations in offline mode."""
 
-    url = os.getenv(
-        "DATABASE_URL"
-    )
+    url = os.getenv("DATABASE_URL")
 
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
-        dialect_opts={
-            "paramstyle": "named"
-        },
+        dialect_opts={"paramstyle": "named"},
         include_object=include_object,
     )
 
@@ -118,11 +98,7 @@ def run_migrations_online() -> None:
         {},
     )
 
-    configuration[
-        "sqlalchemy.url"
-    ] = os.getenv(
-        "DATABASE_URL"
-    )
+    configuration["sqlalchemy.url"] = os.getenv("DATABASE_URL")
 
     connectable = engine_from_config(
         configuration,

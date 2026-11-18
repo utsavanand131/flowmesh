@@ -401,6 +401,7 @@ def get_current_user(
             "id": user.id,
             "email": user.email,
             "name": user.name,
+            "avatar_url": user.avatar_url,
             "role": user.role,
         }
     }
@@ -557,6 +558,7 @@ def google_callback(
     google_account_id = google_user.get("sub")
     google_email = google_user.get("email")
     google_name = google_user.get("name")
+    google_avatar = google_user.get("picture")
     email_verified = google_user.get("email_verified")
 
     if not google_account_id:
@@ -597,6 +599,9 @@ def google_callback(
                 detail="OAuth account is linked to a missing user",
             )
 
+        user.avatar_url = google_avatar
+        db.commit()
+
     else:
         user = db.query(User).filter(User.email == email).first()
 
@@ -613,6 +618,7 @@ def google_callback(
         user = User(
             email=email,
             name=google_name,
+            avatar_url=google_avatar,
             password_hash=None,
         )
         db.add(user)
@@ -846,6 +852,7 @@ def github_callback(
 
     github_account_id = github_user.get("id")
     github_name = github_user.get("name") or github_user.get("login")
+    github_avatar = github_user.get("avatar_url")
 
     if not github_account_id:
         raise HTTPException(
@@ -893,6 +900,9 @@ def github_callback(
                 status_code=500,
                 detail="OAuth account is linked to a missing user",
             )
+        if github_avatar and user.avatar_url != github_avatar:
+            user.avatar_url = github_avatar
+            db.commit()
 
     else:
         user = db.query(User).filter(User.email == email).first()
@@ -910,6 +920,7 @@ def github_callback(
         user = User(
             email=email,
             name=github_name,
+            avatar_url=github_avatar,
             password_hash=None,
         )
         db.add(user)
@@ -950,6 +961,9 @@ def github_callback(
                     status_code=500,
                     detail="OAuth account is linked to a missing user",
                 )
+            if github_avatar:
+                user.avatar_url = github_avatar
+                db.commit()
 
     token = create_access_token(user.id)
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -59,12 +59,14 @@ export default function AppSidebar({
 
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+  const [avatarFailed, setAvatarFailed] = useState(false);
 
   const isAdmin = user?.role === "ADMIN";
 
   const navigation = isAdmin ? adminNavigation : customerNavigation;
 
   const displayName = user?.name?.trim() || "FlowMesh User";
+  const avatarUrl = user?.avatar_url;
 
   const initials = displayName
     .split(/\s+/)
@@ -72,6 +74,10 @@ export default function AppSidebar({
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [avatarUrl]);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -148,8 +154,18 @@ export default function AppSidebar({
       {/* User Profile */}
       <div className="border-t border-border px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/25 bg-accent/10 text-sm font-semibold text-accent">
-            {initials || "U"}
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-accent/25 bg-accent/10 text-sm font-semibold text-accent">
+            {avatarUrl && !avatarFailed ? (
+              <img
+                src={avatarUrl}
+                alt={`${displayName}'s profile`}
+                referrerPolicy="no-referrer"
+                onError={() => setAvatarFailed(true)}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              initials || "U"
+            )}
           </div>
 
           <div className="min-w-0 flex-1">

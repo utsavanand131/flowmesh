@@ -15,6 +15,7 @@ export interface User {
   id: string;
   email: string;
   name: string | null;
+  avatar_url: string | null;
   role: "CUSTOMER" | "ADMIN";
 }
 
@@ -45,7 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      const currentUser: User = data.user;
+
+      const currentUser: User = {
+        ...data.user,
+        avatar_url: data.user.avatar_url ?? null,
+      };
 
       setUser(currentUser);
       return currentUser;
@@ -86,7 +91,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await response.json();
 
         if (active) {
-          setUser(data.user);
+          setUser({
+            ...data.user,
+            avatar_url: data.user.avatar_url ?? null,
+          });
         }
       } catch {
         if (active) setUser(null);

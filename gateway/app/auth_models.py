@@ -1,4 +1,3 @@
-
 import uuid
 from datetime import datetime
 
@@ -26,6 +25,11 @@ class User(Base):
 
     name: Mapped[str | None] = mapped_column(
         String(100),
+        nullable=True,
+    )
+
+    avatar_url: Mapped[str | None] = mapped_column(
+        String(500),
         nullable=True,
     )
 
