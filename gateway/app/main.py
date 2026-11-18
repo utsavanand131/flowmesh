@@ -1,16 +1,18 @@
 import grpc
 
+from datetime import datetime, timezone
+
 from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
-
 from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
+from sqlalchemy import text
 
 from services.delivery_service.app import delivery_pb2
 from services.delivery_service.app import delivery_pb2_grpc
-
 from services.order_service.app import order_pb2
 from services.order_service.app import order_pb2_grpc
+from services.order_service.app.database import engine
 
 from lib.metrics import (
     EVENTS_PROCESSED_TOTAL,
@@ -60,6 +62,11 @@ class UpdateDeliveryStatusRequest(BaseModel):
     status: str
 
 
+# -------------------------------------------------------------------
+# Basic health check
+# -------------------------------------------------------------------
+
+
 @app.get("/health")
 def health_check():
     return {
@@ -68,12 +75,80 @@ def health_check():
     }
 
 
+# -------------------------------------------------------------------
+# Admin service health monitoring
+# -------------------------------------------------------------------
+
+
+@app.get("/admin/services/health")
+def get_services_health(
+    current_user=Depends(require_admin_user),
+):
+    services = {}
+
+    # API Gateway
+    services["api_gateway"] = "healthy"
+
+    # gRPC service health checks
+    def check_grpc_service(name: str, port: int):
+        channel = grpc.insecure_channel(f"localhost:{port}")
+
+        try:
+            grpc.channel_ready_future(channel).result(timeout=2)
+
+            services[name] = "healthy"
+
+        except grpc.FutureTimeoutError:
+            services[name] = "unhealthy"
+
+        finally:
+            channel.close()
+
+    check_grpc_service("order_service", 50051)
+    check_grpc_service("inventory_service", 50052)
+    check_grpc_service("delivery_service", 50053)
+
+    # PostgreSQL health check
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+
+        services["postgresql"] = "healthy"
+
+    except Exception:
+        services["postgresql"] = "unhealthy"
+
+    # Redis health check
+    try:
+        redis_client.ping()
+        services["redis"] = "healthy"
+
+    except RedisError:
+        services["redis"] = "unhealthy"
+
+    overall_status = (
+        "healthy"
+        if all(status == "healthy" for status in services.values())
+        else "degraded"
+    )
+
+    return {
+        "status": overall_status,
+        "services": services,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# -------------------------------------------------------------------
+# Worker metrics
+# -------------------------------------------------------------------
+
+
 @app.get("/metrics")
 def get_worker_metrics(
     current_user=Depends(require_admin_user),
 ):
     """Return FlowMesh worker metrics stored in Redis."""
-
     try:
         return {
             "events_processed_total": get_metric(
@@ -115,6 +190,11 @@ def get_worker_metrics(
             status_code=503,
             detail="Metrics service unavailable",
         )
+
+
+# -------------------------------------------------------------------
+# Create order
+# -------------------------------------------------------------------
 
 
 @app.post("/orders")
@@ -174,6 +254,11 @@ def create_order(
         "status": response.status,
         "delivery": delivery,
     }
+
+
+# -------------------------------------------------------------------
+# List orders
+# -------------------------------------------------------------------
 
 
 @app.get("/orders")
@@ -249,6 +334,11 @@ def list_orders(
     }
 
 
+# -------------------------------------------------------------------
+# Get order
+# -------------------------------------------------------------------
+
+
 @app.get("/orders/{order_id}")
 def get_order(
     order_id: str,
@@ -314,6 +404,11 @@ def get_order(
         "status": response.status,
         "delivery": delivery,
     }
+
+
+# -------------------------------------------------------------------
+# Update delivery status
+# -------------------------------------------------------------------
 
 
 @app.patch("/deliveries/{delivery_id}/status")

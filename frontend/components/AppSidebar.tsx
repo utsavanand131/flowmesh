@@ -44,7 +44,7 @@ const adminNavigation: NavigationGroup[] = [
   {
     heading: "System",
     items: [
-      { label: "Services", icon: "◈", href: "#" },
+      { label: "Services", icon: "◈", href: "/services" },
       { label: "Event Stream", icon: "≋", href: "#" },
     ],
   },
