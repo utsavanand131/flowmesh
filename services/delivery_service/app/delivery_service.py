@@ -1,7 +1,7 @@
-
 import json
 import uuid
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -10,7 +10,6 @@ from services.delivery_service.app.models import (
     OutboxEvent,
     ProcessedEvent,
 )
-
 
 DELIVERY_STATUSES = {
     "ASSIGNED",
@@ -118,13 +117,26 @@ class DeliveryManager:
         db: Session,
         order_id: str,
     ):
-        return (
-            db.query(Delivery)
-            .filter(
-                Delivery.order_id == order_id
-            )
-            .first()
+        return db.query(Delivery).filter(Delivery.order_id == order_id).first()
+
+    def list_deliveries(
+        self,
+        db: Session,
+        page: int,
+        page_size: int,
+    ):
+        query = db.query(Delivery)
+
+        total = query.with_entities(func.count(Delivery.delivery_id)).scalar()
+
+        deliveries = (
+            query.order_by(Delivery.delivery_id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
         )
+
+        return deliveries, total
 
     def update_delivery_status(
         self,

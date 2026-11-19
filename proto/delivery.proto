@@ -1,59 +1,81 @@
+
 syntax = "proto3";
 
 package delivery;
 
 service DeliveryService {
-  rpc CreateDelivery(CreateDeliveryRequest)
-      returns (CreateDeliveryResponse);
+    rpc CreateDelivery(CreateDeliveryRequest)
+        returns (CreateDeliveryResponse);
 
-  rpc GetDelivery(GetDeliveryRequest)
-      returns (GetDeliveryResponse);
+    rpc GetDelivery(GetDeliveryRequest)
+        returns (GetDeliveryResponse);
 
-  rpc GetDeliveryByOrder(GetDeliveryByOrderRequest)
-      returns (GetDeliveryByOrderResponse);
+    rpc GetDeliveryByOrder(GetDeliveryByOrderRequest)
+        returns (GetDeliveryByOrderResponse);
 
-  rpc UpdateDeliveryStatus(UpdateDeliveryStatusRequest)
-      returns (UpdateDeliveryStatusResponse);
+    rpc UpdateDeliveryStatus(UpdateDeliveryStatusRequest)
+        returns (UpdateDeliveryStatusResponse);
+
+    rpc ListDeliveries(ListDeliveriesRequest)
+        returns (ListDeliveriesResponse);
 }
 
 message CreateDeliveryRequest {
-  string order_id = 1;
-  string event_id = 2;
+    string order_id = 1;
+    string event_id = 2;
 }
 
 message CreateDeliveryResponse {
-  string delivery_id = 1;
-  string order_id = 2;
-  string status = 3;
+    string delivery_id = 1;
+    string order_id = 2;
+    string status = 3;
 }
 
 message GetDeliveryRequest {
-  string delivery_id = 1;
+    string delivery_id = 1;
 }
 
 message GetDeliveryResponse {
-  string delivery_id = 1;
-  string order_id = 2;
-  string status = 3;
+    string delivery_id = 1;
+    string order_id = 2;
+    string status = 3;
 }
 
 message GetDeliveryByOrderRequest {
-  string order_id = 1;
+    string order_id = 1;
 }
 
 message GetDeliveryByOrderResponse {
-  string delivery_id = 1;
-  string order_id = 2;
-  string status = 3;
+    string delivery_id = 1;
+    string order_id = 2;
+    string status = 3;
 }
 
 message UpdateDeliveryStatusRequest {
-  string delivery_id = 1;
-  string status = 2;
+    string delivery_id = 1;
+    string status = 2;
 }
 
 message UpdateDeliveryStatusResponse {
-  string delivery_id = 1;
-  string order_id = 2;
-  string status = 3;
+    string delivery_id = 1;
+    string order_id = 2;
+    string status = 3;
+}
+
+message ListDeliveriesRequest {
+    int32 page = 1;
+    int32 page_size = 2;
+}
+
+message DeliveryItem {
+    string delivery_id = 1;
+    string order_id = 2;
+    string status = 3;
+}
+
+message ListDeliveriesResponse {
+    repeated DeliveryItem deliveries = 1;
+    int32 total = 2;
+    int32 page = 3;
+    int32 page_size = 4;
 }
