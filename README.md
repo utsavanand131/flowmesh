@@ -371,7 +371,7 @@ cd C:\projects\flowmesh
 .venv\Scripts\activate
 set PYTHONPATH=C:\projects\flowmesh
 cd services\delivery_service\app
-python grpc_server.py
+python -m services.delivery_service.app.grpc_server
 ```
 
 ### Terminal 5 — API Gateway
