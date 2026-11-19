@@ -27,7 +27,7 @@ const customerNavigation: NavigationGroup[] = [
     items: [
       { label: "Dashboard", icon: "▦", href: "/" },
       { label: "My Orders", icon: "□", href: "/orders" },
-      { label: "Deliveries", icon: "↗", href: "#" },
+      { label: "Deliveries", icon: "↗", href: "/deliveries" },
     ],
   },
 ];
@@ -38,7 +38,7 @@ const adminNavigation: NavigationGroup[] = [
     items: [
       { label: "Dashboard", icon: "▦", href: "/" },
       { label: "All Orders", icon: "□", href: "/orders" },
-      { label: "Deliveries", icon: "↗", href: "#" },
+      { label: "Deliveries", icon: "↗", href: "/deliveries" },
     ],
   },
   {
