@@ -599,9 +599,6 @@ def google_callback(
                 detail="OAuth account is linked to a missing user",
             )
 
-        user.avatar_url = google_avatar
-        db.commit()
-
     else:
         user = db.query(User).filter(User.email == email).first()
 
