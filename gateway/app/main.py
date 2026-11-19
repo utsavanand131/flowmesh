@@ -95,7 +95,6 @@ def get_services_health(
 
         try:
             grpc.channel_ready_future(channel).result(timeout=2)
-
             services[name] = "healthy"
 
         except grpc.FutureTimeoutError:
@@ -149,6 +148,7 @@ def get_worker_metrics(
     current_user=Depends(require_admin_user),
 ):
     """Return FlowMesh worker metrics stored in Redis."""
+
     try:
         return {
             "events_processed_total": get_metric(
@@ -403,6 +403,72 @@ def get_order(
         "quantity": response.quantity,
         "status": response.status,
         "delivery": delivery,
+    }
+
+
+# -------------------------------------------------------------------
+# List deliveries
+# -------------------------------------------------------------------
+
+
+@app.get("/deliveries")
+def list_deliveries(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    current_user=Depends(require_admin_user),
+):
+    channel = grpc.insecure_channel("localhost:50053")
+    stub = delivery_pb2_grpc.DeliveryServiceStub(channel)
+
+    grpc_request = delivery_pb2.ListDeliveriesRequest(
+        page=page,
+        page_size=page_size,
+    )
+
+    try:
+        response = stub.ListDeliveries(grpc_request)
+
+    except grpc.RpcError as error:
+        print(
+            "Delivery Service gRPC error:",
+            error.code(),
+            error.details(),
+        )
+
+        if error.code() == grpc.StatusCode.INVALID_ARGUMENT:
+            raise HTTPException(
+                status_code=400,
+                detail=error.details(),
+            )
+
+        if error.code() == grpc.StatusCode.UNAVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Delivery service unavailable",
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve deliveries",
+        )
+
+    finally:
+        channel.close()
+
+    deliveries = [
+        {
+            "delivery_id": delivery.delivery_id,
+            "order_id": delivery.order_id,
+            "status": delivery.status,
+        }
+        for delivery in response.deliveries
+    ]
+
+    return {
+        "deliveries": deliveries,
+        "total": response.total,
+        "page": response.page,
+        "page_size": response.page_size,
     }
 
 

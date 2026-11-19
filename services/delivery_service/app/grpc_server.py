@@ -3,8 +3,8 @@ from concurrent import futures
 import grpc
 from sqlalchemy.exc import SQLAlchemyError
 
-import delivery_pb2
-import delivery_pb2_grpc
+from . import delivery_pb2
+from . import delivery_pb2_grpc
 
 from database import SessionLocal
 from delivery_service import DeliveryManager
