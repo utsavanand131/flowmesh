@@ -132,7 +132,10 @@ class OrderManager:
         total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
 
         orders = db.scalars(
-            query.order_by(Order.order_id.desc())
+            query.order_by(
+                Order.created_at.desc(),
+                Order.order_id.desc(),
+            )
             .offset((page - 1) * page_size)
             .limit(page_size)
         ).all()
