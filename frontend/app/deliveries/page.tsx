@@ -23,6 +23,13 @@ interface DeliveriesResponse {
   page_size: number;
 }
 
+type UpdateableStatus = "PICKED_UP" | "IN_TRANSIT" | "DELIVERED";
+
+interface ActionMessage {
+  type: "success" | "error";
+  message: string;
+}
+
 function formatStatus(status?: string) {
   if (!status) return "N/A";
 
@@ -30,6 +37,22 @@ function formatStatus(status?: string) {
     .toLowerCase()
     .replaceAll("_", " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function getNextStatuses(status?: string): UpdateableStatus[] {
+  switch (status?.toUpperCase()) {
+    case "ASSIGNED":
+      return ["PICKED_UP"];
+
+    case "PICKED_UP":
+      return ["IN_TRANSIT"];
+
+    case "IN_TRANSIT":
+      return ["DELIVERED"];
+
+    default:
+      return [];
+  }
 }
 
 function StatusBadge({ status }: { status?: string }) {
@@ -67,6 +90,18 @@ export default function DeliveriesPage() {
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const [selectedStatuses, setSelectedStatuses] = useState<
+    Record<string, string>
+  >({});
+
+  const [updatingDeliveryId, setUpdatingDeliveryId] = useState<string | null>(
+    null,
+  );
+
+  const [actionMessage, setActionMessage] = useState<ActionMessage | null>(
+    null,
+  );
+
   const isAdmin = user?.role === "ADMIN";
 
   const fetchDeliveries = useCallback(
@@ -81,6 +116,7 @@ export default function DeliveriesPage() {
 
       setLoading(true);
       setError("");
+      setActionMessage(null);
 
       try {
         const response = await fetch(
@@ -115,8 +151,16 @@ export default function DeliveriesPage() {
 
         const data: DeliveriesResponse = await response.json();
 
-        setDeliveries(data.deliveries ?? []);
+        const records = data.deliveries ?? [];
+
+        setDeliveries(records);
         setTotal(data.total ?? 0);
+
+        setSelectedStatuses(
+          Object.fromEntries(
+            records.map((delivery) => [delivery.delivery_id, delivery.status]),
+          ),
+        );
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
 
@@ -143,6 +187,95 @@ export default function DeliveriesPage() {
     return () => controller.abort();
   }, [fetchDeliveries, refreshKey, isAdmin]);
 
+  const handleStatusUpdate = async (delivery: Delivery) => {
+    if (!API_URL) {
+      setActionMessage({
+        type: "error",
+        message: "API URL is not configured.",
+      });
+      return;
+    }
+
+    const newStatus = selectedStatuses[delivery.delivery_id];
+
+    if (!newStatus || newStatus === delivery.status) {
+      return;
+    }
+
+    const allowedStatuses = getNextStatuses(delivery.status);
+
+    if (!allowedStatuses.includes(newStatus as UpdateableStatus)) {
+      setActionMessage({
+        type: "error",
+        message: "Invalid status transition. Select the next valid status.",
+      });
+      return;
+    }
+
+    setUpdatingDeliveryId(delivery.delivery_id);
+    setActionMessage(null);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/deliveries/${encodeURIComponent(
+          delivery.delivery_id,
+        )}/status`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: newStatus,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        let message = "Unable to update delivery status.";
+
+        try {
+          const data = await response.json();
+          message = data.detail || data.message || message;
+        } catch {
+          // Keep the default error message.
+        }
+
+        throw new Error(message);
+      }
+
+      setDeliveries((current) =>
+        current.map((item) =>
+          item.delivery_id === delivery.delivery_id
+            ? { ...item, status: newStatus }
+            : item,
+        ),
+      );
+
+      setSelectedStatuses((current) => ({
+        ...current,
+        [delivery.delivery_id]: newStatus,
+      }));
+
+      setActionMessage({
+        type: "success",
+        message: `Delivery status updated to ${formatStatus(newStatus)}.`,
+      });
+    } catch (err) {
+      setActionMessage({
+        type: "error",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Something went wrong while updating the delivery.",
+      });
+    } finally {
+      setUpdatingDeliveryId(null);
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const assignedCount = deliveries.filter(
@@ -151,6 +284,10 @@ export default function DeliveriesPage() {
 
   const pickedUpCount = deliveries.filter(
     (delivery) => delivery.status === "PICKED_UP",
+  ).length;
+
+  const inTransitCount = deliveries.filter(
+    (delivery) => delivery.status === "IN_TRANSIT",
   ).length;
 
   const deliveredCount = deliveries.filter(
@@ -250,13 +387,13 @@ export default function DeliveriesPage() {
 
                     <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
                       Monitor delivery assignments, track fulfillment progress,
-                      and view delivery statuses across FlowMesh.
+                      and manage delivery statuses across FlowMesh.
                     </p>
                   </div>
 
                   <button
                     onClick={() => setRefreshKey((current) => current + 1)}
-                    disabled={loading}
+                    disabled={loading || updatingDeliveryId !== null}
                     className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-surface px-4 text-sm font-medium text-foreground transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <span>{loading ? "Loading..." : "↻ Refresh"}</span>
@@ -264,7 +401,7 @@ export default function DeliveriesPage() {
                 </section>
 
                 {/* Delivery Summary */}
-                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                   <div className="rounded-lg border border-border bg-surface p-5">
                     <p className="text-sm text-muted-foreground">
                       Total Deliveries
@@ -286,6 +423,14 @@ export default function DeliveriesPage() {
                     <p className="text-sm text-muted-foreground">Picked Up</p>
                     <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">
                       {loading ? "—" : pickedUpCount}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">On this page</p>
+                  </div>
+
+                  <div className="rounded-lg border border-border bg-surface p-5">
+                    <p className="text-sm text-muted-foreground">In Transit</p>
+                    <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums text-accent">
+                      {loading ? "—" : inTransitCount}
                     </p>
                     <p className="mt-1 text-xs text-muted">On this page</p>
                   </div>
@@ -338,6 +483,23 @@ export default function DeliveriesPage() {
                     </div>
                   )}
 
+                  {/* Update Feedback */}
+                  {actionMessage && (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className={`mx-5 mt-5 rounded-md border p-4 ${
+                        actionMessage.type === "success"
+                          ? "border-success/20 bg-success/10 text-success"
+                          : "border-danger/20 bg-danger/10 text-danger"
+                      }`}
+                    >
+                      <p className="text-sm font-medium">
+                        {actionMessage.message}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Loading */}
                   {!error && loading && (
                     <div className="space-y-3 p-5">
@@ -354,7 +516,6 @@ export default function DeliveriesPage() {
                   {!error && !loading && deliveries.length === 0 && (
                     <div className="px-5 py-16 text-center">
                       <p className="text-sm font-medium">No deliveries found</p>
-
                       <p className="mt-2 text-sm text-muted-foreground">
                         Deliveries will appear here when they are created.
                       </p>
@@ -365,42 +526,106 @@ export default function DeliveriesPage() {
                   {!error && !loading && deliveries.length > 0 && (
                     <>
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[700px] text-left text-sm">
+                        <table className="w-full min-w-[1000px] text-left text-sm">
                           <thead className="border-b border-border bg-surface-muted/50">
                             <tr className="text-xs text-muted-foreground">
                               <th className="px-5 py-3 font-medium">
                                 Delivery ID
                               </th>
-
                               <th className="px-5 py-3 font-medium">
                                 Order ID
                               </th>
-
                               <th className="px-5 py-3 font-medium">
                                 Delivery Status
+                              </th>
+                              <th className="px-5 py-3 font-medium">
+                                Update Status
+                              </th>
+                              <th className="px-5 py-3 text-right font-medium">
+                                Action
                               </th>
                             </tr>
                           </thead>
 
                           <tbody className="divide-y divide-border">
-                            {deliveries.map((delivery) => (
-                              <tr
-                                key={delivery.delivery_id}
-                                className="transition hover:bg-surface-hover/50"
-                              >
-                                <td className="px-5 py-4 font-mono text-xs text-accent">
-                                  {delivery.delivery_id}
-                                </td>
+                            {deliveries.map((delivery) => {
+                              const nextStatuses = getNextStatuses(
+                                delivery.status,
+                              );
 
-                                <td className="px-5 py-4 font-mono text-xs text-muted-foreground">
-                                  {delivery.order_id}
-                                </td>
+                              const selectedStatus =
+                                selectedStatuses[delivery.delivery_id] ??
+                                delivery.status;
 
-                                <td className="px-5 py-4">
-                                  <StatusBadge status={delivery.status} />
-                                </td>
-                              </tr>
-                            ))}
+                              const isUpdating =
+                                updatingDeliveryId === delivery.delivery_id;
+
+                              const hasChanged =
+                                selectedStatus !== delivery.status;
+
+                              return (
+                                <tr
+                                  key={delivery.delivery_id}
+                                  className="transition hover:bg-surface-hover/50"
+                                >
+                                  <td className="px-5 py-4 font-mono text-xs text-accent">
+                                    {delivery.delivery_id}
+                                  </td>
+
+                                  <td className="px-5 py-4 font-mono text-xs text-muted-foreground">
+                                    {delivery.order_id}
+                                  </td>
+
+                                  <td className="px-5 py-4">
+                                    <StatusBadge status={delivery.status} />
+                                  </td>
+
+                                  <td className="px-5 py-4">
+                                    <select
+                                      value={selectedStatus}
+                                      disabled={
+                                        nextStatuses.length === 0 || isUpdating
+                                      }
+                                      onChange={(event) => {
+                                        setSelectedStatuses((current) => ({
+                                          ...current,
+                                          [delivery.delivery_id]:
+                                            event.target.value,
+                                        }));
+                                        setActionMessage(null);
+                                      }}
+                                      className="h-9 min-w-36 rounded-md border border-border bg-background px-3 text-xs text-foreground outline-none transition focus:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      <option value={delivery.status}>
+                                        {formatStatus(delivery.status)}
+                                      </option>
+
+                                      {nextStatuses.map((status) => (
+                                        <option key={status} value={status}>
+                                          {formatStatus(status)}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+
+                                  <td className="px-5 py-4 text-right">
+                                    <button
+                                      onClick={() =>
+                                        handleStatusUpdate(delivery)
+                                      }
+                                      disabled={
+                                        !hasChanged ||
+                                        isUpdating ||
+                                        updatingDeliveryId !== null
+                                      }
+                                      className="inline-flex min-w-24 items-center justify-center rounded-md bg-accent px-3 py-2 text-xs font-medium text-background transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                      {isUpdating ? "Updating..." : "Update"}
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -416,7 +641,7 @@ export default function DeliveriesPage() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => setPage((current) => current - 1)}
-                            disabled={page <= 1}
+                            disabled={page <= 1 || updatingDeliveryId !== null}
                             className="rounded-md border border-border px-3 py-2 text-xs font-medium transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             Previous
@@ -428,7 +653,9 @@ export default function DeliveriesPage() {
 
                           <button
                             onClick={() => setPage((current) => current + 1)}
-                            disabled={page >= totalPages}
+                            disabled={
+                              page >= totalPages || updatingDeliveryId !== null
+                            }
                             className="rounded-md border border-border px-3 py-2 text-xs font-medium transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             Next
@@ -447,8 +674,8 @@ export default function DeliveriesPage() {
 
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
                     Delivery records are retrieved from the FlowMesh Delivery
-                    Service through the API Gateway. This page displays delivery
-                    assignments and their current fulfillment statuses.
+                    Service through the API Gateway. Administrators can update
+                    delivery statuses as fulfillment progresses.
                   </p>
 
                   <p className="mt-3 text-xs text-muted">
