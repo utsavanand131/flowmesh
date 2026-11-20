@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import AppSidebar from "@/components/AppSidebar";
 import ProtectedRoute from "@/components/ProtectedRoute";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const stats = [
   {
@@ -31,7 +33,21 @@ const stats = [
   },
 ];
 
-const recentOrders = [
+interface RecentOrder {
+  id: string;
+  product: string;
+  status: string;
+  delivery: string;
+}
+
+interface CreateOrderResponse {
+  order_id: string;
+  status: string;
+  delivery_id?: string;
+  delivery_status?: string;
+}
+
+const initialOrders: RecentOrder[] = [
   {
     id: "ord_8f31a2",
     product: "product_789",
@@ -95,6 +111,111 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Create Order state
+  const [createOrderOpen, setCreateOrderOpen] = useState(false);
+  const [productId, setProductId] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [submitting, setSubmitting] = useState(false);
+  const [orderError, setOrderError] = useState("");
+  const [orderSuccess, setOrderSuccess] = useState("");
+
+  // Recent Orders state
+  const [recentOrders, setRecentOrders] =
+    useState<RecentOrder[]>(initialOrders);
+
+  const handleCreateOrder = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    setOrderError("");
+    setOrderSuccess("");
+
+    const trimmedProductId = productId.trim();
+    const parsedQuantity = Number(quantity);
+
+    if (!trimmedProductId) {
+      setOrderError("Please enter a product ID.");
+      return;
+    }
+
+    if (!Number.isInteger(parsedQuantity) || parsedQuantity <= 0) {
+      setOrderError("Quantity must be a positive whole number.");
+      return;
+    }
+
+    if (!API_URL) {
+      setOrderError(
+        "API URL is not configured. Check your frontend environment variables.",
+      );
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const response = await fetch(`${API_URL}/orders`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          product_id: trimmedProductId,
+          quantity: parsedQuantity,
+        }),
+      });
+
+      if (!response.ok) {
+        let message = "Unable to create order.";
+
+        try {
+          const data = await response.json();
+          message = data.detail || data.message || message;
+        } catch {
+          // Keep the default error message.
+        }
+
+        throw new Error(message);
+      }
+
+      const data: CreateOrderResponse = await response.json();
+
+      if (!data.order_id) {
+        throw new Error("The server response did not contain an order ID.");
+      }
+
+      const newOrder: RecentOrder = {
+        id: data.order_id,
+        product: trimmedProductId,
+        status: data.status,
+        delivery: data.delivery_status ?? "PROCESSING",
+      };
+
+      setRecentOrders((current) => [newOrder, ...current]);
+
+      setOrderSuccess(`Order created successfully! Order ID: ${data.order_id}`);
+
+      setProductId("");
+      setQuantity("1");
+      setCreateOrderOpen(false);
+    } catch (err) {
+      setOrderError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while creating the order.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const closeCreateOrder = () => {
+    if (submitting) return;
+
+    setCreateOrderOpen(false);
+    setOrderError("");
+  };
 
   return (
     <ProtectedRoute>
@@ -172,11 +293,31 @@ export default function Home() {
                   </p>
                 </div>
 
-                <button className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-[#101614] transition hover:bg-accent-hover">
+                <button
+                  onClick={() => {
+                    setOrderError("");
+                    setOrderSuccess("");
+                    setCreateOrderOpen(true);
+                  }}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-[#101614] transition hover:bg-accent-hover"
+                >
                   <span className="text-lg leading-none">+</span>
                   Create order
                 </button>
               </section>
+
+              {/* Order Success */}
+              {orderSuccess && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="rounded-lg border border-success/20 bg-success/10 p-4"
+                >
+                  <p className="text-sm font-medium text-success">
+                    {orderSuccess}
+                  </p>
+                </div>
+              )}
 
               {/* System Metrics */}
               <section>
@@ -236,7 +377,9 @@ export default function Home() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-xs text-muted">Order ID</p>
-                          <p className="mt-1 text-sm font-medium">{order.id}</p>
+                          <p className="mt-1 break-all text-sm font-medium">
+                            {order.id}
+                          </p>
                         </div>
 
                         <StatusBadge status={order.status} />
@@ -245,7 +388,7 @@ export default function Home() {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <p className="text-xs text-muted">Product</p>
-                          <p className="mt-1 text-sm text-muted-foreground">
+                          <p className="mt-1 break-all text-sm text-muted-foreground">
                             {order.product}
                           </p>
                         </div>
@@ -301,6 +444,129 @@ export default function Home() {
             </div>
           </section>
         </div>
+
+        {/* Create Order Modal */}
+        {createOrderOpen && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4 py-6"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                closeCreateOrder();
+              }
+            }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="create-order-title"
+              className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium text-accent">
+                    FlowMesh / Orders
+                  </p>
+
+                  <h2
+                    id="create-order-title"
+                    className="mt-2 text-xl font-semibold tracking-tight"
+                  >
+                    Create new order
+                  </h2>
+
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Enter the product ID and quantity to place a new order.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeCreateOrder}
+                  disabled={submitting}
+                  aria-label="Close create order modal"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-surface-hover disabled:opacity-50"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateOrder} className="mt-6 space-y-5">
+                {/* Product ID */}
+                <div>
+                  <label
+                    htmlFor="productId"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    Product ID
+                  </label>
+
+                  <input
+                    id="productId"
+                    type="text"
+                    value={productId}
+                    onChange={(event) => setProductId(event.target.value)}
+                    placeholder="e.g. product_123"
+                    required
+                    disabled={submitting}
+                    className="h-11 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-accent disabled:opacity-50"
+                  />
+                </div>
+
+                {/* Quantity */}
+                <div>
+                  <label
+                    htmlFor="quantity"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    Quantity
+                  </label>
+
+                  <input
+                    id="quantity"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={quantity}
+                    onChange={(event) => setQuantity(event.target.value)}
+                    required
+                    disabled={submitting}
+                    className="h-11 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-accent disabled:opacity-50"
+                  />
+                </div>
+
+                {/* Error */}
+                {orderError && (
+                  <div
+                    role="alert"
+                    className="rounded-md border border-danger/20 bg-danger/10 p-3"
+                  >
+                    <p className="text-sm text-danger">{orderError}</p>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={closeCreateOrder}
+                    disabled={submitting}
+                    className="rounded-md border border-border px-4 py-2.5 text-sm font-medium transition hover:bg-surface-hover disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-[#101614] transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {submitting ? "Creating order..." : "Create order"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
     </ProtectedRoute>
   );
