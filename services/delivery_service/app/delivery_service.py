@@ -130,7 +130,10 @@ class DeliveryManager:
         total = query.with_entities(func.count(Delivery.delivery_id)).scalar()
 
         deliveries = (
-            query.order_by(Delivery.delivery_id.desc())
+            query.order_by(
+                Delivery.created_at.desc(),
+                Delivery.delivery_id.desc(),
+            )
             .offset((page - 1) * page_size)
             .limit(page_size)
             .all()

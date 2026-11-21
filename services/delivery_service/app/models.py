@@ -1,4 +1,3 @@
-
 import uuid
 from datetime import datetime
 
@@ -27,6 +26,12 @@ class Delivery(Base):
         String(50),
         nullable=False,
         default="ASSIGNED",
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
 
 
