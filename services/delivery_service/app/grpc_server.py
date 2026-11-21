@@ -13,6 +13,7 @@ delivery_manager = DeliveryManager()
 
 
 class DeliveryService(delivery_pb2_grpc.DeliveryServiceServicer):
+
     def CreateDelivery(self, request, context):
         db = SessionLocal()
 
@@ -142,7 +143,7 @@ class DeliveryService(delivery_pb2_grpc.DeliveryServiceServicer):
 
                 return delivery_pb2.ListDeliveriesResponse()
 
-            deliveries, total = delivery_manager.list_deliveries(
+            deliveries, total, status_counts = delivery_manager.list_deliveries(
                 db=db,
                 page=request.page,
                 page_size=request.page_size,
@@ -160,6 +161,10 @@ class DeliveryService(delivery_pb2_grpc.DeliveryServiceServicer):
                 total=total,
                 page=request.page,
                 page_size=request.page_size,
+                assigned_count=status_counts["assigned"],
+                picked_up_count=status_counts["picked_up"],
+                in_transit_count=status_counts["in_transit"],
+                delivered_count=status_counts["delivered"],
             )
 
         except SQLAlchemyError:

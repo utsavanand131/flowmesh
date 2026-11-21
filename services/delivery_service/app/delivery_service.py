@@ -125,12 +125,36 @@ class DeliveryManager:
         page: int,
         page_size: int,
     ):
-        query = db.query(Delivery)
+        # Fetch global counts across ALL deliveries.
+        counts = db.query(
+            func.count(Delivery.delivery_id).label("total"),
+            func.count(Delivery.delivery_id)
+            .filter(Delivery.status == "ASSIGNED")
+            .label("assigned"),
+            func.count(Delivery.delivery_id)
+            .filter(Delivery.status == "PICKED_UP")
+            .label("picked_up"),
+            func.count(Delivery.delivery_id)
+            .filter(Delivery.status == "IN_TRANSIT")
+            .label("in_transit"),
+            func.count(Delivery.delivery_id)
+            .filter(Delivery.status == "DELIVERED")
+            .label("delivered"),
+        ).one()
 
-        total = query.with_entities(func.count(Delivery.delivery_id)).scalar()
+        total = counts.total
 
+        status_counts = {
+            "assigned": counts.assigned,
+            "picked_up": counts.picked_up,
+            "in_transit": counts.in_transit,
+            "delivered": counts.delivered,
+        }
+
+        # Fetch only the requested page, newest first.
         deliveries = (
-            query.order_by(
+            db.query(Delivery)
+            .order_by(
                 Delivery.created_at.desc(),
                 Delivery.delivery_id.desc(),
             )
@@ -139,7 +163,7 @@ class DeliveryManager:
             .all()
         )
 
-        return deliveries, total
+        return deliveries, total, status_counts
 
     def update_delivery_status(
         self,

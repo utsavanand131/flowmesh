@@ -469,6 +469,13 @@ def list_deliveries(
         "total": response.total,
         "page": response.page,
         "page_size": response.page_size,
+        # Global status counts across all deliveries
+        "status_counts": {
+            "assigned": response.assigned_count,
+            "picked_up": response.picked_up_count,
+            "in_transit": response.in_transit_count,
+            "delivered": response.delivered_count,
+        },
     }
 
 

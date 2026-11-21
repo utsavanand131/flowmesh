@@ -16,11 +16,19 @@ interface Delivery {
   status: string;
 }
 
+interface DeliveryStatusCounts {
+  assigned: number;
+  picked_up: number;
+  in_transit: number;
+  delivered: number;
+}
+
 interface DeliveriesResponse {
   deliveries: Delivery[];
   total: number;
   page: number;
   page_size: number;
+  status_counts: DeliveryStatusCounts;
 }
 
 type UpdateableStatus = "PICKED_UP" | "IN_TRANSIT" | "DELIVERED";
@@ -30,6 +38,13 @@ interface ActionMessage {
   message: string;
 }
 
+const EMPTY_STATUS_COUNTS: DeliveryStatusCounts = {
+  assigned: 0,
+  picked_up: 0,
+  in_transit: 0,
+  delivered: 0,
+};
+
 function formatStatus(status?: string) {
   if (!status) return "N/A";
 
@@ -37,6 +52,25 @@ function formatStatus(status?: string) {
     .toLowerCase()
     .replaceAll("_", " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function getStatusCountKey(status?: string): keyof DeliveryStatusCounts | null {
+  switch (status?.toUpperCase()) {
+    case "ASSIGNED":
+      return "assigned";
+
+    case "PICKED_UP":
+      return "picked_up";
+
+    case "IN_TRANSIT":
+      return "in_transit";
+
+    case "DELIVERED":
+      return "delivered";
+
+    default:
+      return null;
+  }
 }
 
 function getNextStatuses(status?: string): UpdateableStatus[] {
@@ -89,6 +123,9 @@ export default function DeliveriesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const [statusCounts, setStatusCounts] =
+    useState<DeliveryStatusCounts>(EMPTY_STATUS_COUNTS);
 
   const [selectedStatuses, setSelectedStatuses] = useState<
     Record<string, string>
@@ -155,6 +192,7 @@ export default function DeliveriesPage() {
 
         setDeliveries(records);
         setTotal(data.total ?? 0);
+        setStatusCounts(data.status_counts ?? EMPTY_STATUS_COUNTS);
 
         setSelectedStatuses(
           Object.fromEntries(
@@ -259,6 +297,24 @@ export default function DeliveriesPage() {
         [delivery.delivery_id]: newStatus,
       }));
 
+      // Update global status counts immediately after a successful update.
+      setStatusCounts((current) => {
+        const next = { ...current };
+
+        const previousKey = getStatusCountKey(delivery.status);
+        const nextKey = getStatusCountKey(newStatus);
+
+        if (previousKey) {
+          next[previousKey] = Math.max(0, next[previousKey] - 1);
+        }
+
+        if (nextKey) {
+          next[nextKey] += 1;
+        }
+
+        return next;
+      });
+
       setActionMessage({
         type: "success",
         message: `Delivery status updated to ${formatStatus(newStatus)}.`,
@@ -277,22 +333,6 @@ export default function DeliveriesPage() {
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  const assignedCount = deliveries.filter(
-    (delivery) => delivery.status === "ASSIGNED",
-  ).length;
-
-  const pickedUpCount = deliveries.filter(
-    (delivery) => delivery.status === "PICKED_UP",
-  ).length;
-
-  const inTransitCount = deliveries.filter(
-    (delivery) => delivery.status === "IN_TRANSIT",
-  ).length;
-
-  const deliveredCount = deliveries.filter(
-    (delivery) => delivery.status === "DELIVERED",
-  ).length;
 
   return (
     <ProtectedRoute>
@@ -414,33 +454,29 @@ export default function DeliveriesPage() {
                   <div className="rounded-lg border border-border bg-surface p-5">
                     <p className="text-sm text-muted-foreground">Assigned</p>
                     <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums text-warning">
-                      {loading ? "—" : assignedCount}
+                      {loading ? "—" : statusCounts.assigned}
                     </p>
-                    <p className="mt-1 text-xs text-muted">On this page</p>
                   </div>
 
                   <div className="rounded-lg border border-border bg-surface p-5">
                     <p className="text-sm text-muted-foreground">Picked Up</p>
                     <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">
-                      {loading ? "—" : pickedUpCount}
+                      {loading ? "—" : statusCounts.picked_up}
                     </p>
-                    <p className="mt-1 text-xs text-muted">On this page</p>
                   </div>
 
                   <div className="rounded-lg border border-border bg-surface p-5">
                     <p className="text-sm text-muted-foreground">In Transit</p>
                     <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums text-accent">
-                      {loading ? "—" : inTransitCount}
+                      {loading ? "—" : statusCounts.in_transit}
                     </p>
-                    <p className="mt-1 text-xs text-muted">On this page</p>
                   </div>
 
                   <div className="rounded-lg border border-border bg-surface p-5">
                     <p className="text-sm text-muted-foreground">Delivered</p>
                     <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums text-success">
-                      {loading ? "—" : deliveredCount}
+                      {loading ? "—" : statusCounts.delivered}
                     </p>
-                    <p className="mt-1 text-xs text-muted">On this page</p>
                   </div>
                 </section>
 
@@ -679,8 +715,8 @@ export default function DeliveriesPage() {
                   </p>
 
                   <p className="mt-3 text-xs text-muted">
-                    Status counts represent the records currently displayed on
-                    this page. Use pagination to view additional deliveries.
+                    Status counts represent all delivery records across
+                    FlowMesh, independent of the current pagination page.
                   </p>
                 </section>
               </div>

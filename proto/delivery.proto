@@ -78,4 +78,10 @@ message ListDeliveriesResponse {
     int32 total = 2;
     int32 page = 3;
     int32 page_size = 4;
+
+    // Global delivery status counts
+    int32 assigned_count = 5;
+    int32 picked_up_count = 6;
+    int32 in_transit_count = 7;
+    int32 delivered_count = 8;
 }
