@@ -1,10 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+
 import AppSidebar from "@/components/AppSidebar";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 const PAGE_SIZE = 10;
 
 interface Order {
@@ -226,6 +229,7 @@ export default function OrdersPage() {
               <section className="grid gap-4 sm:grid-cols-2">
                 <div className="rounded-lg border border-border bg-surface p-5">
                   <p className="text-sm text-muted-foreground">Total Orders</p>
+
                   <p className="mt-2 text-3xl font-semibold tracking-tight">
                     {loading ? "—" : total}
                   </p>
@@ -235,6 +239,7 @@ export default function OrdersPage() {
                   <p className="text-sm text-muted-foreground">
                     Orders on This Page
                   </p>
+
                   <p className="mt-2 text-3xl font-semibold tracking-tight">
                     {loading ? "—" : orders.length}
                   </p>
@@ -246,6 +251,7 @@ export default function OrdersPage() {
                 <div className="flex flex-col gap-1 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h3 className="text-sm font-semibold">Orders Workspace</h3>
+
                     <p className="mt-1 text-xs text-muted-foreground">
                       Live order data from the FlowMesh API
                     </p>
@@ -261,9 +267,11 @@ export default function OrdersPage() {
                     <p className="text-sm font-medium text-danger">
                       Could not load orders
                     </p>
+
                     <p className="mt-1 text-sm text-muted-foreground">
                       {error}
                     </p>
+
                     <button
                       onClick={() => setRefreshKey((current) => current + 1)}
                       className="mt-3 text-sm font-medium text-accent hover:underline"
@@ -287,6 +295,7 @@ export default function OrdersPage() {
                 {!error && !loading && orders.length === 0 && (
                   <div className="px-5 py-16 text-center">
                     <p className="text-sm font-medium">No orders found</p>
+
                     <p className="mt-2 text-sm text-muted-foreground">
                       Orders will appear here when they are created.
                     </p>
@@ -296,20 +305,26 @@ export default function OrdersPage() {
                 {!error && !loading && orders.length > 0 && (
                   <>
                     <div className="overflow-x-auto">
-                      <table className="w-full min-w-[850px] text-left text-sm">
+                      <table className="w-full min-w-[950px] text-left text-sm">
                         <thead className="border-b border-border bg-surface-muted/50">
                           <tr className="text-xs text-muted-foreground">
                             <th className="px-5 py-3 font-medium">Order ID</th>
+
                             <th className="px-5 py-3 font-medium">
                               Product ID
                             </th>
+
                             <th className="px-5 py-3 font-medium">Quantity</th>
+
                             <th className="px-5 py-3 font-medium">
                               Order Status
                             </th>
+
                             <th className="px-5 py-3 font-medium">
                               Delivery Status
                             </th>
+
+                            <th className="px-5 py-3 font-medium">Actions</th>
                           </tr>
                         </thead>
 
@@ -322,17 +337,30 @@ export default function OrdersPage() {
                               <td className="px-5 py-4 font-mono text-xs text-accent">
                                 {order.order_id}
                               </td>
+
                               <td className="px-5 py-4 font-mono text-xs text-muted-foreground">
                                 {order.product_id}
                               </td>
+
                               <td className="px-5 py-4 tabular-nums">
                                 {order.quantity}
                               </td>
+
                               <td className="px-5 py-4">
                                 <StatusBadge status={order.status} />
                               </td>
+
                               <td className="px-5 py-4">
                                 <StatusBadge status={order.delivery?.status} />
+                              </td>
+
+                              <td className="px-5 py-4">
+                                <Link
+                                  href={`/orders/${order.order_id}/tracking`}
+                                  className="inline-flex items-center justify-center rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-xs font-medium text-accent transition hover:bg-accent/20"
+                                >
+                                  Track Delivery →
+                                </Link>
                               </td>
                             </tr>
                           ))}

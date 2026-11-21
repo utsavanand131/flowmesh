@@ -347,20 +347,12 @@ def get_order(
     channel = grpc.insecure_channel("localhost:50051")
     stub = order_pb2_grpc.OrderServiceStub(channel)
 
-    grpc_request = order_pb2.GetOrderRequest(
-        order_id=order_id,
-    )
+    grpc_request = order_pb2.GetOrderRequest(order_id=order_id)
 
     try:
         response = stub.GetOrder(grpc_request)
 
     except grpc.RpcError as error:
-        print(
-            "Order Service gRPC error:",
-            error.code(),
-            error.details(),
-        )
-
         if error.code() == grpc.StatusCode.NOT_FOUND:
             raise HTTPException(
                 status_code=404,
@@ -381,8 +373,9 @@ def get_order(
     finally:
         channel.close()
 
-    # Users can only retrieve their own orders.
-    if response.user_id != current_user.id:
+    # Customers can only retrieve their own orders.
+    # Admins can retrieve any order.
+    if current_user.role != "ADMIN" and response.user_id != current_user.id:
         raise HTTPException(
             status_code=404,
             detail="Order not found",
