@@ -125,13 +125,13 @@ def _get_stream_info(stream: str) -> dict[str, Any]:
     """
     Return Redis stream metadata.
 
-    An empty or nonexistent stream is represented without raising
-    an exception.
+    Stream existence is checked independently from its length,
+    because a stream may have consumer groups even when empty.
     """
 
-    length = _get_stream_length(stream)
+    exists = bool(redis_client.exists(stream))
 
-    if length == 0:
+    if not exists:
         return {
             "exists": False,
             "length": 0,
@@ -140,6 +140,7 @@ def _get_stream_info(stream: str) -> dict[str, Any]:
             "groups": 0,
         }
 
+    length = _get_stream_length(stream)
     info = redis_client.xinfo_stream(stream)
 
     first_entry = info.get("first-entry")

@@ -718,6 +718,42 @@ def test_admin_can_access_event_streams(
     assert "checked_at" in data
 
 
+def test_get_stream_info_detects_existing_empty_stream_with_consumer_group(
+    monkeypatch,
+):
+    from gateway.app import main
+
+    monkeypatch.setattr(
+        main.redis_client,
+        "exists",
+        lambda stream: 1,
+    )
+
+    monkeypatch.setattr(
+        main,
+        "_get_stream_length",
+        lambda stream: 0,
+    )
+
+    monkeypatch.setattr(
+        main.redis_client,
+        "xinfo_stream",
+        lambda stream: {
+            "first-entry": None,
+            "last-entry": None,
+            "groups": 1,
+        },
+    )
+
+    result = main._get_stream_info("flowmesh:order-events")
+
+    assert result["exists"] is True
+    assert result["length"] == 0
+    assert result["first_entry"] is None
+    assert result["last_entry"] is None
+    assert result["groups"] == 1
+
+
 @patch("gateway.app.main.redis_client.xrevrange")
 def test_admin_can_access_event_activity(
     mock_xrevrange,
