@@ -3,8 +3,8 @@ from concurrent import futures
 import grpc
 from sqlalchemy.exc import SQLAlchemyError
 
-import inventory_pb2
-import inventory_pb2_grpc
+from . import inventory_pb2
+from . import inventory_pb2_grpc
 
 from database import SessionLocal
 from inventory_service import InventoryManager
