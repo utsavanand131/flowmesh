@@ -361,7 +361,7 @@ cd C:\projects\flowmesh
 .venv\Scripts\activate
 set PYTHONPATH=C:\projects\flowmesh
 cd services\inventory_service\app
-python grpc_server.py
+python -m services.inventory_service.app.grpc_server
 ```
 
 ### Terminal 4 — Delivery gRPC Server
