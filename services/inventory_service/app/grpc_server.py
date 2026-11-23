@@ -13,6 +13,40 @@ inventory_manager = InventoryManager()
 
 
 class InventoryService(inventory_pb2_grpc.InventoryServiceServicer):
+    def ListInventory(self, request, context):
+        db = SessionLocal()
+
+        try:
+            result = inventory_manager.list_inventory(db=db)
+
+            return inventory_pb2.ListInventoryResponse(
+                items=[
+                    inventory_pb2.InventoryItem(
+                        product_id=item["product_id"],
+                        quantity=item["quantity"],
+                    )
+                    for item in result["items"]
+                ],
+                total_items=result["total_items"],
+                total_quantity=result["total_quantity"],
+            )
+
+        except SQLAlchemyError:
+            db.rollback()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve inventory")
+            return inventory_pb2.ListInventoryResponse()
+
+        except Exception as error:
+            db.rollback()
+            print("List inventory error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve inventory")
+            return inventory_pb2.ListInventoryResponse()
+
+        finally:
+            db.close()
+
     def CheckStock(self, request, context):
         db = SessionLocal()
 

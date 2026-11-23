@@ -28,6 +28,23 @@ class InventoryManager:
             "available": available_quantity >= quantity,
         }
 
+    def list_inventory(self, db: Session):
+        items = db.query(Inventory).order_by(Inventory.product_id.asc()).all()
+
+        total_quantity = sum(item.quantity for item in items)
+
+        return {
+            "items": [
+                {
+                    "product_id": item.product_id,
+                    "quantity": item.quantity,
+                }
+                for item in items
+            ],
+            "total_items": len(items),
+            "total_quantity": total_quantity,
+        }
+
     def reserve_stock(
         self,
         db: Session,

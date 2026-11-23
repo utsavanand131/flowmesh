@@ -14,6 +14,8 @@ from services.delivery_service.app import delivery_pb2
 from services.delivery_service.app import delivery_pb2_grpc
 from services.order_service.app import order_pb2
 from services.order_service.app import order_pb2_grpc
+from services.inventory_service.app import inventory_pb2
+from services.inventory_service.app import inventory_pb2_grpc
 from services.order_service.app.database import engine
 
 from lib.events import (
@@ -1048,6 +1050,55 @@ def list_deliveries(
             "in_transit": response.in_transit_count,
             "delivered": response.delivered_count,
         },
+    }
+
+
+# -------------------------------------------------------------------
+# List inventory
+# -------------------------------------------------------------------
+
+
+@app.get("/inventory")
+def list_inventory(
+    current_user=Depends(require_admin_user),
+):
+    channel = grpc.insecure_channel("localhost:50052")
+    stub = inventory_pb2_grpc.InventoryServiceStub(channel)
+
+    try:
+        response = stub.ListInventory(inventory_pb2.ListInventoryRequest())
+
+    except grpc.RpcError as error:
+        print(
+            "Inventory Service gRPC error:",
+            error.code(),
+            error.details(),
+        )
+
+        if error.code() == grpc.StatusCode.UNAVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Inventory service unavailable",
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve inventory",
+        )
+
+    finally:
+        channel.close()
+
+    return {
+        "items": [
+            {
+                "product_id": item.product_id,
+                "quantity": item.quantity,
+            }
+            for item in response.items
+        ],
+        "total_items": response.total_items,
+        "total_quantity": response.total_quantity,
     }
 
 

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0finventory.proto\x12\tinventory\"9\n\x11\x43heckStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"W\n\x12\x43heckStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12\x61vailable_quantity\x18\x02 \x01(\x05\x12\x11\n\tavailable\x18\x03 \x01(\x08\"S\n\x13ReserveStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\x12\x16\n\x0ereservation_id\x18\x03 \x01(\t\"X\n\x14ReserveStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12remaining_quantity\x18\x02 \x01(\x05\x12\x10\n\x08reserved\x18\x03 \x01(\x08\"S\n\x13ReleaseStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\x12\x16\n\x0ereservation_id\x18\x03 \x01(\t\"X\n\x14ReleaseStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12remaining_quantity\x18\x02 \x01(\x05\x12\x10\n\x08released\x18\x03 \x01(\x08\x32\xff\x01\n\x10InventoryService\x12I\n\nCheckStock\x12\x1c.inventory.CheckStockRequest\x1a\x1d.inventory.CheckStockResponse\x12O\n\x0cReserveStock\x12\x1e.inventory.ReserveStockRequest\x1a\x1f.inventory.ReserveStockResponse\x12O\n\x0cReleaseStock\x12\x1e.inventory.ReleaseStockRequest\x1a\x1f.inventory.ReleaseStockResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0finventory.proto\x12\tinventory\"9\n\x11\x43heckStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"W\n\x12\x43heckStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12\x61vailable_quantity\x18\x02 \x01(\x05\x12\x11\n\tavailable\x18\x03 \x01(\x08\"S\n\x13ReserveStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\x12\x16\n\x0ereservation_id\x18\x03 \x01(\t\"X\n\x14ReserveStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12remaining_quantity\x18\x02 \x01(\x05\x12\x10\n\x08reserved\x18\x03 \x01(\x08\"S\n\x13ReleaseStockRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\x12\x16\n\x0ereservation_id\x18\x03 \x01(\t\"X\n\x14ReleaseStockResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x1a\n\x12remaining_quantity\x18\x02 \x01(\x05\x12\x10\n\x08released\x18\x03 \x01(\x08\"\x16\n\x14ListInventoryRequest\"5\n\rInventoryItem\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"m\n\x15ListInventoryResponse\x12\'\n\x05items\x18\x01 \x03(\x0b\x32\x18.inventory.InventoryItem\x12\x13\n\x0btotal_items\x18\x02 \x01(\x05\x12\x16\n\x0etotal_quantity\x18\x03 \x01(\x03\x32\xd3\x02\n\x10InventoryService\x12I\n\nCheckStock\x12\x1c.inventory.CheckStockRequest\x1a\x1d.inventory.CheckStockResponse\x12O\n\x0cReserveStock\x12\x1e.inventory.ReserveStockRequest\x1a\x1f.inventory.ReserveStockResponse\x12O\n\x0cReleaseStock\x12\x1e.inventory.ReleaseStockRequest\x1a\x1f.inventory.ReleaseStockResponse\x12R\n\rListInventory\x12\x1f.inventory.ListInventoryRequest\x1a .inventory.ListInventoryResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -43,6 +43,12 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_RELEASESTOCKREQUEST']._serialized_end=436
   _globals['_RELEASESTOCKRESPONSE']._serialized_start=438
   _globals['_RELEASESTOCKRESPONSE']._serialized_end=526
-  _globals['_INVENTORYSERVICE']._serialized_start=529
-  _globals['_INVENTORYSERVICE']._serialized_end=784
+  _globals['_LISTINVENTORYREQUEST']._serialized_start=528
+  _globals['_LISTINVENTORYREQUEST']._serialized_end=550
+  _globals['_INVENTORYITEM']._serialized_start=552
+  _globals['_INVENTORYITEM']._serialized_end=605
+  _globals['_LISTINVENTORYRESPONSE']._serialized_start=607
+  _globals['_LISTINVENTORYRESPONSE']._serialized_end=716
+  _globals['_INVENTORYSERVICE']._serialized_start=719
+  _globals['_INVENTORYSERVICE']._serialized_end=1058
 # @@protoc_insertion_point(module_scope)
