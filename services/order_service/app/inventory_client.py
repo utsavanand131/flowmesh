@@ -1,7 +1,7 @@
 import grpc
 
-import inventory_pb2
-import inventory_pb2_grpc
+from services.inventory_service.app import inventory_pb2
+from services.inventory_service.app import inventory_pb2_grpc
 
 INVENTORY_SERVICE_ADDRESS = "localhost:50052"
 GRPC_TIMEOUT = 5.0

@@ -29,6 +29,9 @@ class InventoryService(inventory_pb2_grpc.InventoryServiceServicer):
                 ],
                 total_items=result["total_items"],
                 total_quantity=result["total_quantity"],
+                low_stock_items=result["low_stock_items"],
+                out_of_stock_items=result["out_of_stock_items"],
+                low_stock_threshold=result["low_stock_threshold"],
             )
 
         except SQLAlchemyError:

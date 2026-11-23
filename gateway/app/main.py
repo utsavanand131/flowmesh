@@ -1088,7 +1088,6 @@ def list_inventory(
 
     finally:
         channel.close()
-
     return {
         "items": [
             {
@@ -1099,6 +1098,9 @@ def list_inventory(
         ],
         "total_items": response.total_items,
         "total_quantity": response.total_quantity,
+        "low_stock_items": response.low_stock_items,
+        "out_of_stock_items": response.out_of_stock_items,
+        "low_stock_threshold": response.low_stock_threshold,
     }
 
 

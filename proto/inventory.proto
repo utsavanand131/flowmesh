@@ -56,4 +56,7 @@ message ListInventoryResponse {
   repeated InventoryItem items = 1;
   int32 total_items = 2;
   int64 total_quantity = 3;
+  int32 low_stock_items = 4;
+  int32 out_of_stock_items = 5;
+  int32 low_stock_threshold = 6;
 }

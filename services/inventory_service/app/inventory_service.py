@@ -1,8 +1,12 @@
+import os
+
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from models import Inventory, InventoryReservation
+
+LOW_STOCK_THRESHOLD = int(os.getenv("LOW_STOCK_THRESHOLD", "10"))
 
 
 class InventoryManager:
@@ -33,6 +37,12 @@ class InventoryManager:
 
         total_quantity = sum(item.quantity for item in items)
 
+        low_stock_items = [
+            item for item in items if 0 < item.quantity <= LOW_STOCK_THRESHOLD
+        ]
+
+        out_of_stock_items = [item for item in items if item.quantity == 0]
+
         return {
             "items": [
                 {
@@ -43,6 +53,9 @@ class InventoryManager:
             ],
             "total_items": len(items),
             "total_quantity": total_quantity,
+            "low_stock_items": len(low_stock_items),
+            "out_of_stock_items": len(out_of_stock_items),
+            "low_stock_threshold": LOW_STOCK_THRESHOLD,
         }
 
     def reserve_stock(

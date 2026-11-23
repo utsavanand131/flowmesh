@@ -351,3 +351,64 @@ def test_release_stock_rejects_mismatched_reservation():
             5,
             "reservation_123",
         )
+
+
+# list_inventory tests
+
+
+def test_list_inventory_returns_inventory_and_statistics():
+    db = MagicMock()
+    db.query.return_value.order_by.return_value.all.return_value = [
+        make_inventory("product_123", 20),
+        make_inventory("product_456", 6),
+        make_inventory("product_789", 0),
+        make_inventory("product_999", 10),
+        make_inventory("product_111", 3),
+    ]
+
+    result = InventoryManager().list_inventory(db)
+
+    assert result == {
+        "items": [
+            {"product_id": "product_123", "quantity": 20},
+            {"product_id": "product_456", "quantity": 6},
+            {"product_id": "product_789", "quantity": 0},
+            {"product_id": "product_999", "quantity": 10},
+            {"product_id": "product_111", "quantity": 3},
+        ],
+        "total_items": 5,
+        "total_quantity": 39,
+        "low_stock_items": 3,
+        "out_of_stock_items": 1,
+        "low_stock_threshold": 10,
+    }
+
+
+def test_list_inventory_returns_zero_statistics_when_empty():
+    db = MagicMock()
+    db.query.return_value.order_by.return_value.all.return_value = []
+
+    result = InventoryManager().list_inventory(db)
+
+    assert result == {
+        "items": [],
+        "total_items": 0,
+        "total_quantity": 0,
+        "low_stock_items": 0,
+        "out_of_stock_items": 0,
+        "low_stock_threshold": 10,
+    }
+
+
+def test_list_inventory_excludes_out_of_stock_from_low_stock():
+    db = MagicMock()
+    db.query.return_value.order_by.return_value.all.return_value = [
+        make_inventory("product_123", 0),
+        make_inventory("product_456", 10),
+        make_inventory("product_789", 11),
+    ]
+
+    result = InventoryManager().list_inventory(db)
+
+    assert result["low_stock_items"] == 1
+    assert result["out_of_stock_items"] == 1
