@@ -986,3 +986,55 @@ def test_dead_letter_events_return_503_when_redis_is_unavailable(
 
     assert response.status_code == 503
     assert response.json()["detail"] == ("Event monitoring service unavailable")
+
+
+def test_customer_cannot_access_order_overview(authenticated_client):
+    response = authenticated_client.get("/admin/orders/overview")
+
+    assert response.status_code == 403
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.delivery_pb2_grpc.DeliveryServiceStub")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_admin_can_access_order_overview(
+    mock_order_stub_class,
+    mock_delivery_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channels = [MagicMock(), MagicMock()]
+    mock_channel_factory.side_effect = mock_channels
+
+    mock_order_stub = MagicMock()
+    mock_order_stub_class.return_value = mock_order_stub
+    mock_order_stub.GetOrderStatistics.return_value = MagicMock(
+        total_orders=36,
+        pending_orders=18,
+        delivered_orders=7,
+    )
+
+    mock_delivery_stub = MagicMock()
+    mock_delivery_stub_class.return_value = mock_delivery_stub
+    mock_delivery_stub.ListDeliveries.return_value = MagicMock(
+        assigned_count=24,
+        picked_up_count=1,
+        in_transit_count=0,
+        delivered_count=8,
+    )
+
+    response = admin_client.get("/admin/orders/overview")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "total_orders": 36,
+        "pending_orders": 18,
+        "in_delivery": 25,
+        "delivered_orders": 7,
+    }
+
+    mock_order_stub.GetOrderStatistics.assert_called_once()
+    mock_delivery_stub.ListDeliveries.assert_called_once()
+
+    for channel in mock_channels:
+        channel.close.assert_called_once()

@@ -1053,6 +1053,64 @@ def list_deliveries(
     }
 
 
+@app.get("/admin/orders/overview")
+def get_order_overview(
+    current_user=Depends(require_admin_user),
+):
+    order_channel = grpc.insecure_channel("localhost:50051")
+    delivery_channel = grpc.insecure_channel("localhost:50053")
+
+    order_stub = order_pb2_grpc.OrderServiceStub(order_channel)
+    delivery_stub = delivery_pb2_grpc.DeliveryServiceStub(delivery_channel)
+
+    try:
+        order_response = order_stub.GetOrderStatistics(
+            order_pb2.GetOrderStatisticsRequest()
+        )
+
+        delivery_response = delivery_stub.ListDeliveries(
+            delivery_pb2.ListDeliveriesRequest(
+                page=1,
+                page_size=1,
+            )
+        )
+
+    except grpc.RpcError as error:
+        print(
+            "Order overview gRPC error:",
+            error.code(),
+            error.details(),
+        )
+
+        if error.code() == grpc.StatusCode.UNAVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Order or delivery service unavailable",
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve order overview",
+        )
+
+    finally:
+        order_channel.close()
+        delivery_channel.close()
+
+    in_delivery = (
+        delivery_response.assigned_count
+        + delivery_response.picked_up_count
+        + delivery_response.in_transit_count
+    )
+
+    return {
+        "total_orders": order_response.total_orders,
+        "pending_orders": order_response.pending_orders,
+        "in_delivery": in_delivery,
+        "delivered_orders": order_response.delivered_orders,
+    }
+
+
 # -------------------------------------------------------------------
 # List inventory
 # -------------------------------------------------------------------

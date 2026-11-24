@@ -161,6 +161,26 @@ class OrderManager:
             "page_size": page_size,
         }
 
+    def get_order_statistics(
+        self,
+        db: Session,
+    ):
+        counts = db.query(
+            func.count(Order.order_id).label("total_orders"),
+            func.count(Order.order_id)
+            .filter(Order.status == "PENDING")
+            .label("pending_orders"),
+            func.count(Order.order_id)
+            .filter(Order.status == "DELIVERED")
+            .label("delivered_orders"),
+        ).one()
+
+        return {
+            "total_orders": counts.total_orders,
+            "pending_orders": counts.pending_orders,
+            "delivered_orders": counts.delivered_orders,
+        }
+
     def update_order_status(
         self,
         db: Session,

@@ -160,6 +160,35 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
         finally:
             db.close()
 
+    def GetOrderStatistics(self, request, context):
+        db = SessionLocal()
+
+        try:
+            result = order_manager.get_order_statistics(
+                db=db,
+            )
+
+            return order_pb2.GetOrderStatisticsResponse(
+                total_orders=result["total_orders"],
+                pending_orders=result["pending_orders"],
+                delivered_orders=result["delivered_orders"],
+            )
+
+        except SQLAlchemyError:
+            db.rollback()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve order statistics")
+            return order_pb2.GetOrderStatisticsResponse()
+
+        except Exception as error:
+            print("Order statistics error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve order statistics")
+            return order_pb2.GetOrderStatisticsResponse()
+
+        finally:
+            db.close()
+
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))

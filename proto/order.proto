@@ -12,6 +12,9 @@ service OrderService {
 
     rpc ListOrders(ListOrdersRequest)
         returns (ListOrdersResponse);
+
+    rpc GetOrderStatistics(GetOrderStatisticsRequest)
+        returns (GetOrderStatisticsResponse);
 }
 
 message CreateOrderRequest {
@@ -62,4 +65,12 @@ message ListOrdersResponse {
     int32 total = 2;
     int32 page = 3;
     int32 page_size = 4;
+}
+
+message GetOrderStatisticsRequest {}
+
+message GetOrderStatisticsResponse {
+    int32 total_orders = 1;
+    int32 pending_orders = 2;
+    int32 delivered_orders = 3;
 }

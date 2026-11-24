@@ -7,32 +7,12 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-const stats = [
-  {
-    label: "Total orders",
-    value: "24",
-    detail: "Last 24 hours",
-    icon: "▤",
-  },
-  {
-    label: "Pending",
-    value: "03",
-    detail: "Awaiting processing",
-    icon: "◷",
-  },
-  {
-    label: "In delivery",
-    value: "05",
-    detail: "Active deliveries",
-    icon: "↗",
-  },
-  {
-    label: "Delivered",
-    value: "16",
-    detail: "Completed orders",
-    icon: "✓",
-  },
-];
+interface OrderOverviewResponse {
+  total_orders: number;
+  pending_orders: number;
+  in_delivery: number;
+  delivered_orders: number;
+}
 
 interface RecentOrder {
   id: string;
@@ -146,6 +126,81 @@ export default function Home() {
   const [inventoryLoading, setInventoryLoading] = useState(true);
   const [inventoryError, setInventoryError] = useState("");
 
+  // Live order statistics state
+  const [orderOverview, setOrderOverview] =
+    useState<OrderOverviewResponse | null>(null);
+  const [orderOverviewLoading, setOrderOverviewLoading] = useState(true);
+  const [orderOverviewError, setOrderOverviewError] = useState("");
+
+  // Fetch live order statistics for administrators only.
+  useEffect(() => {
+    if (!isAdmin) {
+      setOrderOverviewLoading(false);
+      setOrderOverview(null);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function fetchOrderOverview() {
+      if (!API_URL) {
+        setOrderOverviewError(
+          "API URL is not configured. Check your frontend environment variables.",
+        );
+        setOrderOverviewLoading(false);
+        return;
+      }
+
+      setOrderOverviewLoading(true);
+      setOrderOverviewError("");
+
+      try {
+        const response = await fetch(`${API_URL}/admin/orders/overview`, {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          let message = "Unable to load order statistics.";
+
+          try {
+            const data = await response.json();
+            message = data.detail || data.message || message;
+          } catch {
+            // Keep the default error message.
+          }
+
+          throw new Error(message);
+        }
+
+        const data: OrderOverviewResponse = await response.json();
+        setOrderOverview(data);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+
+        setOrderOverviewError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong while loading order statistics.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setOrderOverviewLoading(false);
+        }
+      }
+    }
+
+    fetchOrderOverview();
+
+    return () => {
+      controller.abort();
+    };
+  }, [isAdmin]);
+
   // Fetch inventory statistics for administrators only.
   useEffect(() => {
     if (!isAdmin) {
@@ -192,7 +247,6 @@ export default function Home() {
         }
 
         const data: InventoryResponse = await response.json();
-
         setInventory(data);
       } catch (err) {
         if (controller.signal.aborted) return;
@@ -415,39 +469,102 @@ export default function Home() {
                   </p>
                 </div>
               )}
+              {/* System Metrics - Admin Only */}
+              {isAdmin && (
+                <section>
+                  <div className="mb-4 flex items-center justify-between">
+                    <h2 className="text-sm font-semibold">System metrics</h2>
+                    <span className="text-xs text-muted">Live statistics</span>
+                  </div>
 
-              {/* System Metrics */}
-              <section>
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold">System metrics</h2>
-                  <span className="text-xs text-muted">Last 24 hours</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  {stats.map((stat) => (
+                  {orderOverviewLoading && (
                     <div
-                      key={stat.label}
-                      className="rounded-lg border border-border bg-surface p-4 sm:p-5"
+                      role="status"
+                      className="rounded-lg border border-border bg-surface p-6"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-medium text-muted-foreground">
-                          {stat.label}
+                      <p className="text-sm text-muted-foreground">
+                        Loading order statistics...
+                      </p>
+                    </div>
+                  )}
+
+                  {!orderOverviewLoading && orderOverviewError && (
+                    <div
+                      role="alert"
+                      className="rounded-lg border border-danger/20 bg-danger/10 p-4"
+                    >
+                      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                        <p className="text-sm text-danger">
+                          {orderOverviewError}
                         </p>
 
-                        <span className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-hover text-base text-accent">
-                          {stat.icon}
-                        </span>
+                        <button
+                          onClick={() => window.location.reload()}
+                          className="self-start rounded-md border border-danger/30 px-3 py-2 text-xs font-medium text-danger transition hover:bg-danger/10 sm:self-auto"
+                        >
+                          Retry
+                        </button>
                       </div>
-
-                      <p className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
-                        {stat.value}
-                      </p>
-
-                      <p className="mt-1.5 text-xs text-muted">{stat.detail}</p>
                     </div>
-                  ))}
-                </div>
-              </section>
+                  )}
+
+                  {!orderOverviewLoading &&
+                    !orderOverviewError &&
+                    orderOverview && (
+                      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                        {[
+                          {
+                            label: "Total orders",
+                            value: orderOverview.total_orders,
+                            detail: "All orders",
+                            icon: "▤",
+                          },
+                          {
+                            label: "Pending",
+                            value: orderOverview.pending_orders,
+                            detail: "Awaiting processing",
+                            icon: "◷",
+                          },
+                          {
+                            label: "In delivery",
+                            value: orderOverview.in_delivery,
+                            detail: "Active deliveries",
+                            icon: "↗",
+                          },
+                          {
+                            label: "Delivered",
+                            value: orderOverview.delivered_orders,
+                            detail: "Completed orders",
+                            icon: "✓",
+                          },
+                        ].map((stat) => (
+                          <div
+                            key={stat.label}
+                            className="rounded-lg border border-border bg-surface p-4 sm:p-5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-medium text-muted-foreground">
+                                {stat.label}
+                              </p>
+
+                              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-hover text-base text-accent">
+                                {stat.icon}
+                              </span>
+                            </div>
+
+                            <p className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
+                              {stat.value}
+                            </p>
+
+                            <p className="mt-1.5 text-xs text-muted">
+                              {stat.detail}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                </section>
+              )}
 
               {/* Inventory Statistics - Admin Only */}
               {isAdmin && (
@@ -457,6 +574,7 @@ export default function Home() {
                       <h2 className="text-sm font-semibold">
                         Inventory statistics
                       </h2>
+
                       <p className="mt-1 text-xs text-muted">
                         Live stock levels across your inventory.
                       </p>
@@ -634,7 +752,6 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-
                 {/* Desktop Orders Table */}
                 <div className="hidden overflow-x-auto md:block">
                   <table className="w-full text-left">
