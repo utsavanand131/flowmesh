@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import AppSidebar from "@/components/AppSidebar";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -45,6 +46,18 @@ interface CreateOrderResponse {
   status: string;
   delivery_id?: string;
   delivery_status?: string;
+}
+
+interface InventoryResponse {
+  items: {
+    product_id: string;
+    quantity: number;
+  }[];
+  total_items: number;
+  total_quantity: number;
+  low_stock_items: number;
+  out_of_stock_items: number;
+  low_stock_threshold: number;
 }
 
 const initialOrders: RecentOrder[] = [
@@ -110,6 +123,10 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function Home() {
+  const { user } = useAuth();
+
+  const isAdmin = user?.role === "ADMIN";
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Create Order state
@@ -123,6 +140,81 @@ export default function Home() {
   // Recent Orders state
   const [recentOrders, setRecentOrders] =
     useState<RecentOrder[]>(initialOrders);
+
+  // Inventory state
+  const [inventory, setInventory] = useState<InventoryResponse | null>(null);
+  const [inventoryLoading, setInventoryLoading] = useState(true);
+  const [inventoryError, setInventoryError] = useState("");
+
+  // Fetch inventory statistics for administrators only.
+  useEffect(() => {
+    if (!isAdmin) {
+      setInventoryLoading(false);
+      setInventory(null);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function fetchInventory() {
+      if (!API_URL) {
+        setInventoryError(
+          "API URL is not configured. Check your frontend environment variables.",
+        );
+        setInventoryLoading(false);
+        return;
+      }
+
+      setInventoryLoading(true);
+      setInventoryError("");
+
+      try {
+        const response = await fetch(`${API_URL}/inventory`, {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          let message = "Unable to load inventory statistics.";
+
+          try {
+            const data = await response.json();
+            message = data.detail || data.message || message;
+          } catch {
+            // Keep the default error message.
+          }
+
+          throw new Error(message);
+        }
+
+        const data: InventoryResponse = await response.json();
+
+        setInventory(data);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+
+        setInventoryError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong while loading inventory.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setInventoryLoading(false);
+        }
+      }
+    }
+
+    fetchInventory();
+
+    return () => {
+      controller.abort();
+    };
+  }, [isAdmin]);
 
   const handleCreateOrder = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -215,6 +307,11 @@ export default function Home() {
 
     setCreateOrderOpen(false);
     setOrderError("");
+  };
+
+  const retryInventoryFetch = () => {
+    // Reload the page to retry the inventory request.
+    window.location.reload();
   };
 
   return (
@@ -351,6 +448,142 @@ export default function Home() {
                   ))}
                 </div>
               </section>
+
+              {/* Inventory Statistics - Admin Only */}
+              {isAdmin && (
+                <section>
+                  <div className="mb-4 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                    <div>
+                      <h2 className="text-sm font-semibold">
+                        Inventory statistics
+                      </h2>
+                      <p className="mt-1 text-xs text-muted">
+                        Live stock levels across your inventory.
+                      </p>
+                    </div>
+
+                    {inventory && (
+                      <span className="text-xs text-muted">
+                        Low-stock threshold: {inventory.low_stock_threshold}{" "}
+                        units
+                      </span>
+                    )}
+                  </div>
+
+                  {inventoryLoading && (
+                    <div
+                      role="status"
+                      className="rounded-lg border border-border bg-surface p-6"
+                    >
+                      <p className="text-sm text-muted-foreground">
+                        Loading inventory statistics...
+                      </p>
+                    </div>
+                  )}
+
+                  {!inventoryLoading && inventoryError && (
+                    <div
+                      role="alert"
+                      className="rounded-lg border border-danger/20 bg-danger/10 p-4"
+                    >
+                      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                        <p className="text-sm text-danger">{inventoryError}</p>
+
+                        <button
+                          onClick={retryInventoryFetch}
+                          className="self-start rounded-md border border-danger/30 px-3 py-2 text-xs font-medium text-danger transition hover:bg-danger/10 sm:self-auto"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!inventoryLoading && !inventoryError && inventory && (
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                      <div className="rounded-lg border border-border bg-surface p-4 sm:p-5">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Total products
+                          </p>
+
+                          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-hover text-base text-accent">
+                            ▦
+                          </span>
+                        </div>
+
+                        <p className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
+                          {inventory.total_items}
+                        </p>
+
+                        <p className="mt-1.5 text-xs text-muted">
+                          Products tracked
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-border bg-surface p-4 sm:p-5">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Available stock
+                          </p>
+
+                          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-hover text-base text-success">
+                            ✓
+                          </span>
+                        </div>
+
+                        <p className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
+                          {inventory.total_quantity}
+                        </p>
+
+                        <p className="mt-1.5 text-xs text-muted">
+                          Total available units
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-border bg-surface p-4 sm:p-5">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Low stock
+                          </p>
+
+                          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-warning/10 text-base text-warning">
+                            !
+                          </span>
+                        </div>
+
+                        <p className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
+                          {inventory.low_stock_items}
+                        </p>
+
+                        <p className="mt-1.5 text-xs text-muted">
+                          Below or at threshold
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-border bg-surface p-4 sm:p-5">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Out of stock
+                          </p>
+
+                          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-danger/10 text-base text-danger">
+                            ×
+                          </span>
+                        </div>
+
+                        <p className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
+                          {inventory.out_of_stock_items}
+                        </p>
+
+                        <p className="mt-1.5 text-xs text-muted">
+                          Products with zero stock
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
 
               {/* Recent Orders */}
               <section className="overflow-hidden rounded-lg border border-border bg-surface">
