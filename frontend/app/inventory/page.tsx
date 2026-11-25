@@ -25,14 +25,8 @@ interface InventoryResponse {
 type InventoryFilter = "ALL" | "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
 
 function getStockStatus(quantity: number, threshold: number) {
-  if (quantity === 0) {
-    return "OUT OF STOCK";
-  }
-
-  if (quantity <= threshold) {
-    return "LOW STOCK";
-  }
-
+  if (quantity === 0) return "OUT OF STOCK";
+  if (quantity <= threshold) return "LOW STOCK";
   return "IN STOCK";
 }
 
@@ -66,6 +60,7 @@ export default function InventoryPage() {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+
   const [summary, setSummary] = useState({
     totalItems: 0,
     totalQuantity: 0,
@@ -80,6 +75,23 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Inventory management dialogs
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showAdjustDialog, setShowAdjustDialog] = useState(false);
+
+  // Add product form
+  const [productId, setProductId] = useState("");
+  const [initialQuantity, setInitialQuantity] = useState("");
+
+  // Adjust stock form
+  const [selectedProduct, setSelectedProduct] = useState("");
+  const [adjustment, setAdjustment] = useState("");
+
+  // Mutation feedback
+  const [mutationLoading, setMutationLoading] = useState(false);
+  const [mutationError, setMutationError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const isAdmin = user?.role === "ADMIN";
 
@@ -155,6 +167,159 @@ export default function InventoryPage() {
     return () => controller.abort();
   }, [fetchInventory, refreshKey, isAdmin]);
 
+  async function handleAddProduct(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const normalizedProductId = productId.trim();
+    const quantity = Number(initialQuantity);
+
+    if (!normalizedProductId || normalizedProductId.length > 100) {
+      setMutationError("Product ID must contain between 1 and 100 characters.");
+      return;
+    }
+
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      setMutationError("Initial quantity must be a non-negative integer.");
+      return;
+    }
+
+    if (!API_URL) {
+      setMutationError(
+        "API URL is not configured. Check your frontend environment variables.",
+      );
+      return;
+    }
+
+    setMutationLoading(true);
+    setMutationError("");
+    setSuccessMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/inventory`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          product_id: normalizedProductId,
+          quantity,
+        }),
+      });
+
+      let data: { detail?: string } = {};
+
+      try {
+        data = await response.json();
+      } catch {
+        // Keep the default response handling.
+      }
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to add product.");
+      }
+
+      setSuccessMessage(`Product ${normalizedProductId} added successfully.`);
+
+      setProductId("");
+      setInitialQuantity("");
+      setShowAddDialog(false);
+      setRefreshKey((current) => current + 1);
+    } catch (err) {
+      setMutationError(
+        err instanceof Error ? err.message : "Something went wrong.",
+      );
+    } finally {
+      setMutationLoading(false);
+    }
+  }
+
+  async function handleAdjustStock(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const amount = Number(adjustment);
+
+    if (!selectedProduct) {
+      setMutationError("Please select a product.");
+      return;
+    }
+
+    if (!Number.isInteger(amount) || amount === 0) {
+      setMutationError("Enter a non-zero whole number.");
+      return;
+    }
+
+    if (!API_URL) {
+      setMutationError(
+        "API URL is not configured. Check your frontend environment variables.",
+      );
+      return;
+    }
+
+    setMutationLoading(true);
+    setMutationError("");
+    setSuccessMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/inventory/${encodeURIComponent(selectedProduct)}/stock`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            adjustment: amount,
+          }),
+        },
+      );
+
+      let data: { detail?: string; quantity?: number } = {};
+
+      try {
+        data = await response.json();
+      } catch {
+        // Keep the default response handling.
+      }
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Unable to adjust stock.");
+      }
+
+      setSuccessMessage(
+        `Stock updated for ${selectedProduct}. New quantity: ${data.quantity}.`,
+      );
+
+      setAdjustment("");
+      setSelectedProduct("");
+      setShowAdjustDialog(false);
+      setRefreshKey((current) => current + 1);
+    } catch (err) {
+      setMutationError(
+        err instanceof Error ? err.message : "Something went wrong.",
+      );
+    } finally {
+      setMutationLoading(false);
+    }
+  }
+
+  function closeAddDialog() {
+    if (mutationLoading) return;
+
+    setShowAddDialog(false);
+    setMutationError("");
+  }
+
+  function closeAdjustDialog() {
+    if (mutationLoading) return;
+
+    setShowAdjustDialog(false);
+    setMutationError("");
+  }
+
   const filteredInventory = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
 
@@ -174,6 +339,10 @@ export default function InventoryPage() {
       return matchesSearch && matchesFilter;
     });
   }, [inventory, search, filter, summary.lowStockThreshold]);
+
+  const selectedInventoryItem = inventory.find(
+    (item) => item.product_id === selectedProduct,
+  );
 
   return (
     <ProtectedRoute>
@@ -258,14 +427,61 @@ export default function InventoryPage() {
                       </p>
                     </div>
 
-                    <button
-                      onClick={() => setRefreshKey((current) => current + 1)}
-                      disabled={loading}
-                      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-surface px-4 text-sm font-medium text-foreground transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {loading ? "Loading..." : "↻ Refresh"}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setMutationError("");
+                          setSuccessMessage("");
+                          setShowAddDialog(true);
+                        }}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-white transition hover:opacity-90"
+                      >
+                        + Add Product
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setMutationError("");
+                          setSuccessMessage("");
+                          setSelectedProduct("");
+                          setAdjustment("");
+                          setShowAdjustDialog(true);
+                        }}
+                        disabled={inventory.length === 0}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-surface px-4 text-sm font-medium transition hover:bg-surface-hover disabled:opacity-50"
+                      >
+                        ± Adjust Stock
+                      </button>
+
+                      <button
+                        onClick={() => setRefreshKey((current) => current + 1)}
+                        disabled={loading}
+                        className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-surface px-4 text-sm font-medium transition hover:bg-surface-hover disabled:opacity-50"
+                      >
+                        {loading ? "Loading..." : "↻ Refresh"}
+                      </button>
+                    </div>
                   </section>
+
+                  {/* Success Message */}
+                  {successMessage && (
+                    <div
+                      role="status"
+                      className="flex items-start justify-between gap-3 rounded-md border border-success/20 bg-success/10 p-4"
+                    >
+                      <p className="text-sm font-medium text-success">
+                        {successMessage}
+                      </p>
+
+                      <button
+                        onClick={() => setSuccessMessage("")}
+                        aria-label="Dismiss success message"
+                        className="text-success hover:opacity-70"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
 
                   {/* Inventory Summary */}
                   <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -461,6 +677,239 @@ export default function InventoryPage() {
             </div>
           </section>
         </div>
+
+        {/* Add Product Dialog */}
+        {isAdmin && showAddDialog && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+            role="presentation"
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="add-product-title"
+              className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-2xl"
+            >
+              <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="add-product-title" className="text-lg font-semibold">
+                    Add Product
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Create a new inventory item with its initial stock.
+                  </p>
+                </div>
+
+                <button
+                  onClick={closeAddDialog}
+                  disabled={mutationLoading}
+                  aria-label="Close dialog"
+                  className="text-xl text-muted-foreground hover:text-foreground disabled:opacity-50"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleAddProduct} className="space-y-5">
+                <div>
+                  <label
+                    htmlFor="new-product-id"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    Product ID
+                  </label>
+                  <input
+                    id="new-product-id"
+                    type="text"
+                    value={productId}
+                    onChange={(event) => setProductId(event.target.value)}
+                    placeholder="e.g. product_1001"
+                    maxLength={100}
+                    required
+                    disabled={mutationLoading}
+                    className="h-11 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:border-accent disabled:opacity-50"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Must be unique and no longer than 100 characters.
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="initial-quantity"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    Initial Quantity
+                  </label>
+                  <input
+                    id="initial-quantity"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={initialQuantity}
+                    onChange={(event) => setInitialQuantity(event.target.value)}
+                    placeholder="Enter initial stock"
+                    required
+                    disabled={mutationLoading}
+                    className="h-11 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:border-accent disabled:opacity-50"
+                  />
+                </div>
+
+                {mutationError && (
+                  <div
+                    role="alert"
+                    className="rounded-md border border-danger/20 bg-danger/10 p-3 text-sm text-danger"
+                  >
+                    {mutationError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-3 border-t border-border pt-5">
+                  <button
+                    type="button"
+                    onClick={closeAddDialog}
+                    disabled={mutationLoading}
+                    className="h-10 rounded-md border border-border px-4 text-sm font-medium hover:bg-surface-hover disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={mutationLoading}
+                    className="h-10 rounded-md bg-accent px-4 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {mutationLoading ? "Adding..." : "Add Product"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        )}
+
+        {/* Adjust Stock Dialog */}
+        {isAdmin && showAdjustDialog && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+            role="presentation"
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="adjust-stock-title"
+              className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-2xl"
+            >
+              <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="adjust-stock-title" className="text-lg font-semibold">
+                    Adjust Stock
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Increase or decrease the available quantity of a product.
+                  </p>
+                </div>
+
+                <button
+                  onClick={closeAdjustDialog}
+                  disabled={mutationLoading}
+                  aria-label="Close dialog"
+                  className="text-xl text-muted-foreground hover:text-foreground disabled:opacity-50"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleAdjustStock} className="space-y-5">
+                <div>
+                  <label
+                    htmlFor="adjust-product"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    Select Product
+                  </label>
+                  <select
+                    id="adjust-product"
+                    value={selectedProduct}
+                    onChange={(event) => setSelectedProduct(event.target.value)}
+                    required
+                    disabled={mutationLoading}
+                    className="h-11 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:border-accent disabled:opacity-50"
+                  >
+                    <option value="">Choose a product</option>
+                    {inventory.map((item) => (
+                      <option key={item.product_id} value={item.product_id}>
+                        {item.product_id} — {item.quantity} units
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedInventoryItem && (
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">
+                      Current available quantity
+                    </p>
+                    <p className="mt-1 text-xl font-semibold tabular-nums">
+                      {selectedInventoryItem.quantity}
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <label
+                    htmlFor="stock-adjustment"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    Stock Adjustment
+                  </label>
+                  <input
+                    id="stock-adjustment"
+                    type="number"
+                    step="1"
+                    value={adjustment}
+                    onChange={(event) => setAdjustment(event.target.value)}
+                    placeholder="e.g. 10 or -5"
+                    required
+                    disabled={mutationLoading}
+                    className="h-11 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:border-accent disabled:opacity-50"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Use a positive number to add stock or a negative number to
+                    remove stock. The resulting quantity cannot be negative.
+                  </p>
+                </div>
+
+                {mutationError && (
+                  <div
+                    role="alert"
+                    className="rounded-md border border-danger/20 bg-danger/10 p-3 text-sm text-danger"
+                  >
+                    {mutationError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-3 border-t border-border pt-5">
+                  <button
+                    type="button"
+                    onClick={closeAdjustDialog}
+                    disabled={mutationLoading}
+                    className="h-10 rounded-md border border-border px-4 text-sm font-medium hover:bg-surface-hover disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={mutationLoading || inventory.length === 0}
+                    className="h-10 rounded-md bg-accent px-4 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {mutationLoading ? "Updating..." : "Update Stock"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        )}
       </main>
     </ProtectedRoute>
   );
