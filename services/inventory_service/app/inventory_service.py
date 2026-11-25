@@ -10,6 +10,98 @@ LOW_STOCK_THRESHOLD = int(os.getenv("LOW_STOCK_THRESHOLD", "10"))
 
 
 class InventoryManager:
+
+    def add_inventory_item(
+        self,
+        db: Session,
+        product_id: str,
+        quantity: int,
+    ):
+        product_id = product_id.strip()
+
+        if not product_id:
+            raise ValueError("Product ID is required")
+
+        if len(product_id) > 100:
+            raise ValueError("Product ID cannot exceed 100 characters")
+
+        if quantity < 0:
+            raise ValueError("Quantity cannot be negative")
+
+        if db.get(Inventory, product_id) is not None:
+            raise ValueError("Product already exists")
+
+        inventory = Inventory(
+            product_id=product_id,
+            quantity=quantity,
+        )
+
+        try:
+            db.add(inventory)
+            db.commit()
+            db.refresh(inventory)
+
+        except IntegrityError:
+            db.rollback()
+            raise ValueError("Product already exists")
+
+        except Exception:
+            db.rollback()
+            raise
+
+        return {
+            "product_id": inventory.product_id,
+            "quantity": inventory.quantity,
+        }
+
+    def adjust_stock(
+        self,
+        db: Session,
+        product_id: str,
+        adjustment: int,
+    ):
+        if adjustment == 0:
+            raise ValueError("Stock adjustment cannot be zero")
+
+        inventory = db.get(Inventory, product_id)
+
+        if inventory is None:
+            raise ValueError("Product not found")
+
+        statement = (
+            update(Inventory)
+            .where(
+                Inventory.product_id == product_id,
+                Inventory.quantity + adjustment >= 0,
+            )
+            .values(
+                quantity=Inventory.quantity + adjustment,
+            )
+        )
+
+        try:
+            result = db.execute(statement)
+
+            if result.rowcount == 0:
+                db.rollback()
+                raise ValueError("Insufficient stock for this adjustment")
+
+            db.commit()
+
+            db.refresh(inventory)
+
+        except ValueError:
+            raise
+
+        except Exception:
+            db.rollback()
+            raise
+
+        return {
+            "product_id": inventory.product_id,
+            "quantity": inventory.quantity,
+        }
+
     def check_stock(
         self,
         db: Session,

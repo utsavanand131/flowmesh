@@ -8,6 +8,9 @@ service InventoryService {
   rpc ReserveStock(ReserveStockRequest) returns (ReserveStockResponse);
   rpc ReleaseStock(ReleaseStockRequest) returns (ReleaseStockResponse);
   rpc ListInventory(ListInventoryRequest) returns (ListInventoryResponse);
+
+  rpc AddInventoryItem(AddInventoryItemRequest) returns (AddInventoryItemResponse);
+  rpc AdjustStock(AdjustStockRequest) returns (AdjustStockResponse);
 }
 
 message CheckStockRequest {
@@ -59,4 +62,24 @@ message ListInventoryResponse {
   int32 low_stock_items = 4;
   int32 out_of_stock_items = 5;
   int32 low_stock_threshold = 6;
+}
+
+message AddInventoryItemRequest {
+  string product_id = 1;
+  int32 quantity = 2;
+}
+
+message AddInventoryItemResponse {
+  string product_id = 1;
+  int32 quantity = 2;
+}
+
+message AdjustStockRequest {
+  string product_id = 1;
+  int32 adjustment = 2;
+}
+
+message AdjustStockResponse {
+  string product_id = 1;
+  int32 quantity = 2;
 }

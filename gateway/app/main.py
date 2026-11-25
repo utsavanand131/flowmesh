@@ -107,6 +107,15 @@ class UpdateDeliveryStatusRequest(BaseModel):
     status: str
 
 
+class CreateInventoryRequest(BaseModel):
+    product_id: str = Field(min_length=1, max_length=100)
+    quantity: int = Field(ge=0)
+
+
+class AdjustInventoryStockRequest(BaseModel):
+    adjustment: int
+
+
 # -------------------------------------------------------------------
 # Event monitoring helpers
 # -------------------------------------------------------------------
@@ -1159,6 +1168,139 @@ def list_inventory(
         "low_stock_items": response.low_stock_items,
         "out_of_stock_items": response.out_of_stock_items,
         "low_stock_threshold": response.low_stock_threshold,
+    }
+
+
+# -------------------------------------------------------------------
+# Add inventory item
+# -------------------------------------------------------------------
+
+
+@app.post("/inventory")
+def add_inventory_item(
+    request: CreateInventoryRequest,
+    current_user=Depends(require_admin_user),
+):
+    channel = grpc.insecure_channel("localhost:50052")
+    stub = inventory_pb2_grpc.InventoryServiceStub(channel)
+
+    grpc_request = inventory_pb2.AddInventoryItemRequest(
+        product_id=request.product_id,
+        quantity=request.quantity,
+    )
+
+    try:
+        response = stub.AddInventoryItem(grpc_request)
+
+    except grpc.RpcError as error:
+        print(
+            "Inventory Service gRPC error:",
+            error.code(),
+            error.details(),
+        )
+
+        if error.code() == grpc.StatusCode.ALREADY_EXISTS:
+            raise HTTPException(
+                status_code=409,
+                detail="Product already exists",
+            )
+
+        if error.code() == grpc.StatusCode.INVALID_ARGUMENT:
+            raise HTTPException(
+                status_code=400,
+                detail=error.details(),
+            )
+
+        if error.code() == grpc.StatusCode.UNAVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Inventory service unavailable",
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to add inventory item",
+        )
+
+    finally:
+        channel.close()
+
+    return {
+        "product_id": response.product_id,
+        "quantity": response.quantity,
+    }
+
+
+# -------------------------------------------------------------------
+# Adjust inventory stock
+# -------------------------------------------------------------------
+
+
+@app.patch("/inventory/{product_id}/stock")
+def adjust_inventory_stock(
+    product_id: str,
+    request: AdjustInventoryStockRequest,
+    current_user=Depends(require_admin_user),
+):
+    if request.adjustment == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Stock adjustment cannot be zero",
+        )
+
+    channel = grpc.insecure_channel("localhost:50052")
+    stub = inventory_pb2_grpc.InventoryServiceStub(channel)
+
+    grpc_request = inventory_pb2.AdjustStockRequest(
+        product_id=product_id,
+        adjustment=request.adjustment,
+    )
+
+    try:
+        response = stub.AdjustStock(grpc_request)
+
+    except grpc.RpcError as error:
+        print(
+            "Inventory Service gRPC error:",
+            error.code(),
+            error.details(),
+        )
+
+        if error.code() == grpc.StatusCode.NOT_FOUND:
+            raise HTTPException(
+                status_code=404,
+                detail="Product not found",
+            )
+
+        if error.code() == grpc.StatusCode.FAILED_PRECONDITION:
+            raise HTTPException(
+                status_code=409,
+                detail=error.details(),
+            )
+
+        if error.code() == grpc.StatusCode.INVALID_ARGUMENT:
+            raise HTTPException(
+                status_code=400,
+                detail=error.details(),
+            )
+
+        if error.code() == grpc.StatusCode.UNAVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Inventory service unavailable",
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to adjust inventory stock",
+        )
+
+    finally:
+        channel.close()
+
+    return {
+        "product_id": response.product_id,
+        "quantity": response.quantity,
     }
 
 

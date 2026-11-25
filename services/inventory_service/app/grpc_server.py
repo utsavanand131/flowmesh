@@ -188,6 +188,98 @@ class InventoryService(inventory_pb2_grpc.InventoryServiceServicer):
         finally:
             db.close()
 
+    def AddInventoryItem(self, request, context):
+        db = SessionLocal()
+
+        try:
+            result = inventory_manager.add_inventory_item(
+                db=db,
+                product_id=request.product_id,
+                quantity=request.quantity,
+            )
+
+            return inventory_pb2.AddInventoryItemResponse(
+                product_id=result["product_id"],
+                quantity=result["quantity"],
+            )
+
+        except ValueError as error:
+            db.rollback()
+
+            message = str(error)
+
+            if message == "Product already exists":
+                context.set_code(grpc.StatusCode.ALREADY_EXISTS)
+            else:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+
+            context.set_details(message)
+            return inventory_pb2.AddInventoryItemResponse()
+
+        except SQLAlchemyError as error:
+            db.rollback()
+            print("Add inventory item database error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to add inventory item")
+            return inventory_pb2.AddInventoryItemResponse()
+
+        except Exception as error:
+            db.rollback()
+            print("Add inventory item error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to add inventory item")
+            return inventory_pb2.AddInventoryItemResponse()
+
+        finally:
+            db.close()
+
+    def AdjustStock(self, request, context):
+        db = SessionLocal()
+
+        try:
+            result = inventory_manager.adjust_stock(
+                db=db,
+                product_id=request.product_id,
+                adjustment=request.adjustment,
+            )
+
+            return inventory_pb2.AdjustStockResponse(
+                product_id=result["product_id"],
+                quantity=result["quantity"],
+            )
+
+        except ValueError as error:
+            db.rollback()
+
+            message = str(error)
+
+            if message == "Product not found":
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+            elif message == "Insufficient stock for this adjustment":
+                context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+            else:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+
+            context.set_details(message)
+            return inventory_pb2.AdjustStockResponse()
+
+        except SQLAlchemyError as error:
+            db.rollback()
+            print("Adjust stock database error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to adjust stock")
+            return inventory_pb2.AdjustStockResponse()
+
+        except Exception as error:
+            db.rollback()
+            print("Adjust stock error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to adjust stock")
+            return inventory_pb2.AdjustStockResponse()
+
+        finally:
+            db.close()
+
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
