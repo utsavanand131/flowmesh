@@ -39,6 +39,7 @@ const adminNavigation: NavigationGroup[] = [
       { label: "Dashboard", icon: "▦", href: "/" },
       { label: "All Orders", icon: "□", href: "/orders" },
       { label: "Deliveries", icon: "↗", href: "/deliveries" },
+      { label: "Inventory", icon: "▤", href: "/inventory" },
     ],
   },
   {
