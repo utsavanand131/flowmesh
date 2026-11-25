@@ -449,7 +449,7 @@ pytest -v
 The latest verified test result:
 
 ```text
-203 passed, 2 warnings
+233 passed, 2 warnings
 ```
 
 The two warnings are existing deprecation warnings from Starlette/httpx and AnyIO.
