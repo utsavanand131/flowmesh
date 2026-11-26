@@ -73,4 +73,7 @@ message GetOrderStatisticsResponse {
     int32 total_orders = 1;
     int32 pending_orders = 2;
     int32 delivered_orders = 3;
+    int32 confirmed_orders = 4;
+    int32 processing_orders = 5;
+    double completion_rate = 6;
 }

@@ -1011,7 +1011,10 @@ def test_admin_can_access_order_overview(
     mock_order_stub.GetOrderStatistics.return_value = MagicMock(
         total_orders=36,
         pending_orders=18,
+        confirmed_orders=3,
+        processing_orders=8,
         delivered_orders=7,
+        completion_rate=19.44,
     )
 
     mock_delivery_stub = MagicMock()
@@ -1029,8 +1032,11 @@ def test_admin_can_access_order_overview(
     assert response.json() == {
         "total_orders": 36,
         "pending_orders": 18,
+        "confirmed_orders": 3,
+        "processing_orders": 8,
         "in_delivery": 25,
         "delivered_orders": 7,
+        "completion_rate": 19.44,
     }
 
     mock_order_stub.GetOrderStatistics.assert_called_once()

@@ -82,7 +82,10 @@ def test_get_order_statistics_returns_correct_counts(
     assert statistics == {
         "total_orders": 4,
         "pending_orders": 2,
+        "confirmed_orders": 0,
+        "processing_orders": 1,
         "delivered_orders": 1,
+        "completion_rate": 25.0,
     }
 
 
@@ -95,7 +98,10 @@ def test_get_order_statistics_returns_zero_for_empty_database(
     assert statistics == {
         "total_orders": 0,
         "pending_orders": 0,
+        "confirmed_orders": 0,
+        "processing_orders": 0,
         "delivered_orders": 0,
+        "completion_rate": 0.0,
     }
 
 
@@ -119,7 +125,10 @@ def test_order_statistics_update_after_status_change(
     assert initial_statistics == {
         "total_orders": 1,
         "pending_orders": 1,
+        "confirmed_orders": 0,
+        "processing_orders": 0,
         "delivered_orders": 0,
+        "completion_rate": 0.0,
     }
 
     updated_order, error = order_manager.update_order_status(
@@ -145,5 +154,8 @@ def test_order_statistics_update_after_status_change(
     assert final_statistics == {
         "total_orders": 1,
         "pending_orders": 0,
+        "confirmed_orders": 0,
+        "processing_orders": 0,
         "delivered_orders": 1,
+        "completion_rate": 100.0,
     }

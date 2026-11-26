@@ -1115,8 +1115,11 @@ def get_order_overview(
     return {
         "total_orders": order_response.total_orders,
         "pending_orders": order_response.pending_orders,
+        "confirmed_orders": order_response.confirmed_orders,
+        "processing_orders": order_response.processing_orders,
         "in_delivery": in_delivery,
         "delivered_orders": order_response.delivered_orders,
+        "completion_rate": order_response.completion_rate,
     }
 
 

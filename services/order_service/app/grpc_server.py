@@ -172,6 +172,9 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
                 total_orders=result["total_orders"],
                 pending_orders=result["pending_orders"],
                 delivered_orders=result["delivered_orders"],
+                confirmed_orders=result["confirmed_orders"],
+                processing_orders=result["processing_orders"],
+                completion_rate=result["completion_rate"],
             )
 
         except SQLAlchemyError:

@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import date, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -68,7 +69,6 @@ class OrderManager:
             db.add(event)
 
             db.commit()
-
             db.refresh(order)
 
         except SQLAlchemyError:
@@ -171,15 +171,75 @@ class OrderManager:
             .filter(Order.status == "PENDING")
             .label("pending_orders"),
             func.count(Order.order_id)
+            .filter(Order.status == "CONFIRMED")
+            .label("confirmed_orders"),
+            func.count(Order.order_id)
+            .filter(Order.status == "PROCESSING")
+            .label("processing_orders"),
+            func.count(Order.order_id)
             .filter(Order.status == "DELIVERED")
             .label("delivered_orders"),
         ).one()
 
+        total_orders = counts.total_orders or 0
+        delivered_orders = counts.delivered_orders or 0
+
+        completion_rate = (
+            round((delivered_orders / total_orders) * 100, 2)
+            if total_orders > 0
+            else 0.0
+        )
+
         return {
-            "total_orders": counts.total_orders,
-            "pending_orders": counts.pending_orders,
-            "delivered_orders": counts.delivered_orders,
+            "total_orders": total_orders,
+            "pending_orders": counts.pending_orders or 0,
+            "confirmed_orders": counts.confirmed_orders or 0,
+            "processing_orders": counts.processing_orders or 0,
+            "delivered_orders": delivered_orders,
+            "completion_rate": completion_rate,
         }
+
+    def get_daily_order_trends(
+        self,
+        db: Session,
+        days: int = 7,
+    ):
+        if days < 1:
+            raise ValueError("Days must be at least 1")
+
+        today = date.today()
+        start_date = today - timedelta(days=days - 1)
+
+        daily_counts = (
+            db.query(
+                func.date(Order.created_at).label("order_date"),
+                func.count(Order.order_id).label("order_count"),
+            )
+            .filter(
+                func.date(Order.created_at) >= start_date,
+                func.date(Order.created_at) <= today,
+            )
+            .group_by(func.date(Order.created_at))
+            .order_by(func.date(Order.created_at))
+            .all()
+        )
+
+        counts_by_date = {str(row.order_date): row.order_count for row in daily_counts}
+
+        trends = []
+
+        for day_offset in range(days):
+            current_date = start_date + timedelta(days=day_offset)
+            date_key = current_date.isoformat()
+
+            trends.append(
+                {
+                    "date": date_key,
+                    "order_count": counts_by_date.get(date_key, 0),
+                }
+            )
+
+        return trends
 
     def update_order_status(
         self,
