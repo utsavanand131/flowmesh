@@ -1044,3 +1044,147 @@ def test_admin_can_access_order_overview(
 
     for channel in mock_channels:
         channel.close.assert_called_once()
+
+
+# -------------------------------------------------------------------
+# Daily order trends tests
+# -------------------------------------------------------------------
+
+
+def test_customer_cannot_access_order_trends(authenticated_client):
+    response = authenticated_client.get("/admin/orders/trends")
+
+    assert response.status_code == 403
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_admin_can_access_order_trends(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    mock_stub.GetDailyOrderTrends.return_value = MagicMock(
+        trends=[
+            MagicMock(date="2026-11-24", order_count=3),
+            MagicMock(date="2026-11-25", order_count=5),
+            MagicMock(date="2026-11-26", order_count=2),
+        ]
+    )
+
+    response = admin_client.get("/admin/orders/trends")
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "trends": [
+            {
+                "date": "2026-11-24",
+                "order_count": 3,
+            },
+            {
+                "date": "2026-11-25",
+                "order_count": 5,
+            },
+            {
+                "date": "2026-11-26",
+                "order_count": 2,
+            },
+        ]
+    }
+
+    request = mock_stub.GetDailyOrderTrends.call_args.args[0]
+    assert request.days == 7
+
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_order_trends_supports_custom_days(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    mock_stub.GetDailyOrderTrends.return_value = MagicMock(trends=[])
+
+    response = admin_client.get(
+        "/admin/orders/trends",
+        params={"days": 30},
+    )
+
+    assert response.status_code == 200
+
+    request = mock_stub.GetDailyOrderTrends.call_args.args[0]
+    assert request.days == 30
+
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_order_trends_rejects_invalid_days(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    error = grpc.RpcError()
+    error.code = lambda: grpc.StatusCode.INVALID_ARGUMENT
+    error.details = lambda: "Days must be at least 1"
+
+    mock_stub.GetDailyOrderTrends.side_effect = error
+
+    response = admin_client.get(
+        "/admin/orders/trends",
+        params={"days": -1},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Days must be at least 1"
+
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_order_trends_service_unavailable(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    error = grpc.RpcError()
+    error.code = lambda: grpc.StatusCode.UNAVAILABLE
+    error.details = lambda: "Service unavailable"
+
+    mock_stub.GetDailyOrderTrends.side_effect = error
+
+    response = admin_client.get("/admin/orders/trends")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Order service unavailable"
+
+    mock_channel.close.assert_called_once()

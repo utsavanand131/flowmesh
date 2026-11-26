@@ -15,6 +15,9 @@ service OrderService {
 
     rpc GetOrderStatistics(GetOrderStatisticsRequest)
         returns (GetOrderStatisticsResponse);
+
+    rpc GetDailyOrderTrends(GetDailyOrderTrendsRequest)
+        returns (GetDailyOrderTrendsResponse);
 }
 
 message CreateOrderRequest {
@@ -76,4 +79,17 @@ message GetOrderStatisticsResponse {
     int32 confirmed_orders = 4;
     int32 processing_orders = 5;
     double completion_rate = 6;
+}
+
+message GetDailyOrderTrendsRequest {
+    int32 days = 1;
+}
+
+message DailyOrderTrend {
+    string date = 1;
+    int32 order_count = 2;
+}
+
+message GetDailyOrderTrendsResponse {
+    repeated DailyOrderTrend trends = 1;
 }

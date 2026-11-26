@@ -1123,6 +1123,59 @@ def get_order_overview(
     }
 
 
+@app.get("/admin/orders/trends")
+def get_daily_order_trends(
+    days: int = 7,
+    current_user=Depends(require_admin_user),
+):
+    order_channel = grpc.insecure_channel("localhost:50051")
+    order_stub = order_pb2_grpc.OrderServiceStub(order_channel)
+
+    try:
+        response = order_stub.GetDailyOrderTrends(
+            order_pb2.GetDailyOrderTrendsRequest(
+                days=days,
+            )
+        )
+
+        return {
+            "trends": [
+                {
+                    "date": trend.date,
+                    "order_count": trend.order_count,
+                }
+                for trend in response.trends
+            ]
+        }
+
+    except grpc.RpcError as error:
+        print(
+            "Daily order trends gRPC error:",
+            error.code(),
+            error.details(),
+        )
+
+        if error.code() == grpc.StatusCode.UNAVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Order service unavailable",
+            )
+
+        if error.code() == grpc.StatusCode.INVALID_ARGUMENT:
+            raise HTTPException(
+                status_code=400,
+                detail=error.details(),
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve daily order trends",
+        )
+
+    finally:
+        order_channel.close()
+
+
 # -------------------------------------------------------------------
 # List inventory
 # -------------------------------------------------------------------

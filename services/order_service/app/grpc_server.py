@@ -192,6 +192,47 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
         finally:
             db.close()
 
+    def GetDailyOrderTrends(self, request, context):
+        db = SessionLocal()
+
+        try:
+            days = request.days or 7
+
+            if days < 1:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("Days must be at least 1")
+                return order_pb2.GetDailyOrderTrendsResponse()
+
+            trends = order_manager.get_daily_order_trends(
+                db=db,
+                days=days,
+            )
+
+            response = order_pb2.GetDailyOrderTrendsResponse()
+
+            for trend in trends:
+                response.trends.add(
+                    date=trend["date"],
+                    order_count=trend["order_count"],
+                )
+
+            return response
+
+        except SQLAlchemyError:
+            db.rollback()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve daily order trends")
+            return order_pb2.GetDailyOrderTrendsResponse()
+
+        except Exception as error:
+            print("Daily order trends error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve daily order trends")
+            return order_pb2.GetDailyOrderTrendsResponse()
+
+        finally:
+            db.close()
+
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
