@@ -16,6 +16,9 @@ service OrderService {
     rpc GetOrderStatistics(GetOrderStatisticsRequest)
         returns (GetOrderStatisticsResponse);
 
+    rpc GetPeriodOrderStatistics(GetPeriodOrderStatisticsRequest)
+        returns (GetPeriodOrderStatisticsResponse);
+
     rpc GetDailyOrderTrends(GetDailyOrderTrendsRequest)
         returns (GetDailyOrderTrendsResponse);
 }
@@ -73,6 +76,19 @@ message ListOrdersResponse {
 message GetOrderStatisticsRequest {}
 
 message GetOrderStatisticsResponse {
+    int32 total_orders = 1;
+    int32 pending_orders = 2;
+    int32 delivered_orders = 3;
+    int32 confirmed_orders = 4;
+    int32 processing_orders = 5;
+    double completion_rate = 6;
+}
+
+message GetPeriodOrderStatisticsRequest {
+    int32 days = 1;
+}
+
+message GetPeriodOrderStatisticsResponse {
     int32 total_orders = 1;
     int32 pending_orders = 2;
     int32 delivered_orders = 3;

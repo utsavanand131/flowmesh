@@ -6,10 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from delivery_client import get_delivery_by_order
-from inventory_client import check_stock
-from inventory_client import release_stock
-from inventory_client import reserve_stock
+from .delivery_client import get_delivery_by_order
+from .inventory_client import check_stock, release_stock, reserve_stock
 from services.order_service.app.models import Order, OutboxEvent
 
 
@@ -180,6 +178,58 @@ class OrderManager:
             .filter(Order.status == "DELIVERED")
             .label("delivered_orders"),
         ).one()
+
+        total_orders = counts.total_orders or 0
+        delivered_orders = counts.delivered_orders or 0
+
+        completion_rate = (
+            round((delivered_orders / total_orders) * 100, 2)
+            if total_orders > 0
+            else 0.0
+        )
+
+        return {
+            "total_orders": total_orders,
+            "pending_orders": counts.pending_orders or 0,
+            "confirmed_orders": counts.confirmed_orders or 0,
+            "processing_orders": counts.processing_orders or 0,
+            "delivered_orders": delivered_orders,
+            "completion_rate": completion_rate,
+        }
+
+    def get_period_order_statistics(
+        self,
+        db: Session,
+        days: int = 7,
+    ):
+        if days < 1:
+            raise ValueError("Days must be at least 1")
+
+        today = date.today()
+        start_date = today - timedelta(days=days - 1)
+
+        counts = (
+            db.query(
+                func.count(Order.order_id).label("total_orders"),
+                func.count(Order.order_id)
+                .filter(Order.status == "PENDING")
+                .label("pending_orders"),
+                func.count(Order.order_id)
+                .filter(Order.status == "CONFIRMED")
+                .label("confirmed_orders"),
+                func.count(Order.order_id)
+                .filter(Order.status == "PROCESSING")
+                .label("processing_orders"),
+                func.count(Order.order_id)
+                .filter(Order.status == "DELIVERED")
+                .label("delivered_orders"),
+            )
+            .filter(
+                func.date(Order.created_at) >= start_date,
+                func.date(Order.created_at) <= today,
+            )
+            .one()
+        )
 
         total_orders = counts.total_orders or 0
         delivered_orders = counts.delivered_orders or 0

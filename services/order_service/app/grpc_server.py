@@ -192,6 +192,46 @@ class OrderService(order_pb2_grpc.OrderServiceServicer):
         finally:
             db.close()
 
+    def GetPeriodOrderStatistics(self, request, context):
+        db = SessionLocal()
+
+        try:
+            days = request.days or 7
+
+            if days < 1:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("Days must be at least 1")
+                return order_pb2.GetPeriodOrderStatisticsResponse()
+
+            result = order_manager.get_period_order_statistics(
+                db=db,
+                days=days,
+            )
+
+            return order_pb2.GetPeriodOrderStatisticsResponse(
+                total_orders=result["total_orders"],
+                pending_orders=result["pending_orders"],
+                delivered_orders=result["delivered_orders"],
+                confirmed_orders=result["confirmed_orders"],
+                processing_orders=result["processing_orders"],
+                completion_rate=result["completion_rate"],
+            )
+
+        except SQLAlchemyError:
+            db.rollback()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve period order statistics")
+            return order_pb2.GetPeriodOrderStatisticsResponse()
+
+        except Exception as error:
+            print("Period order statistics error:", error)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve period order statistics")
+            return order_pb2.GetPeriodOrderStatisticsResponse()
+
+        finally:
+            db.close()
+
     def GetDailyOrderTrends(self, request, context):
         db = SessionLocal()
 

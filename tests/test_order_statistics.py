@@ -289,3 +289,133 @@ def test_daily_order_trends_rejects_invalid_days(
             db_session,
             days=0,
         )
+
+
+def test_period_order_statistics_returns_correct_counts(
+    db_session,
+    order_manager,
+):
+    today = date.today()
+
+    orders = [
+        Order(
+            order_id="period_order_1",
+            user_id="user_1",
+            product_id="product_1",
+            quantity=1,
+            status="PENDING",
+            created_at=datetime.combine(
+                today,
+                datetime.min.time(),
+                tzinfo=timezone.utc,
+            ),
+        ),
+        Order(
+            order_id="period_order_2",
+            user_id="user_1",
+            product_id="product_2",
+            quantity=1,
+            status="PENDING",
+            created_at=datetime.combine(
+                today,
+                datetime.min.time(),
+                tzinfo=timezone.utc,
+            ),
+        ),
+        Order(
+            order_id="period_order_3",
+            user_id="user_2",
+            product_id="product_3",
+            quantity=1,
+            status="CONFIRMED",
+            created_at=datetime.combine(
+                today - timedelta(days=2),
+                datetime.min.time(),
+                tzinfo=timezone.utc,
+            ),
+        ),
+        Order(
+            order_id="period_order_4",
+            user_id="user_2",
+            product_id="product_4",
+            quantity=1,
+            status="PROCESSING",
+            created_at=datetime.combine(
+                today - timedelta(days=3),
+                datetime.min.time(),
+                tzinfo=timezone.utc,
+            ),
+        ),
+        Order(
+            order_id="period_order_5",
+            user_id="user_3",
+            product_id="product_5",
+            quantity=1,
+            status="DELIVERED",
+            created_at=datetime.combine(
+                today - timedelta(days=4),
+                datetime.min.time(),
+                tzinfo=timezone.utc,
+            ),
+        ),
+        # This order is outside the seven-day period.
+        Order(
+            order_id="period_order_6",
+            user_id="user_3",
+            product_id="product_6",
+            quantity=1,
+            status="DELIVERED",
+            created_at=datetime.combine(
+                today - timedelta(days=7),
+                datetime.min.time(),
+                tzinfo=timezone.utc,
+            ),
+        ),
+    ]
+
+    db_session.add_all(orders)
+    db_session.commit()
+
+    statistics = order_manager.get_period_order_statistics(
+        db_session,
+        days=7,
+    )
+
+    assert statistics == {
+        "total_orders": 5,
+        "pending_orders": 2,
+        "confirmed_orders": 1,
+        "processing_orders": 1,
+        "delivered_orders": 1,
+        "completion_rate": 20.0,
+    }
+
+
+def test_period_order_statistics_returns_zero_for_empty_database(
+    db_session,
+    order_manager,
+):
+    statistics = order_manager.get_period_order_statistics(
+        db_session,
+        days=7,
+    )
+
+    assert statistics == {
+        "total_orders": 0,
+        "pending_orders": 0,
+        "confirmed_orders": 0,
+        "processing_orders": 0,
+        "delivered_orders": 0,
+        "completion_rate": 0.0,
+    }
+
+
+def test_period_order_statistics_rejects_invalid_days(
+    db_session,
+    order_manager,
+):
+    with pytest.raises(ValueError, match="Days must be at least 1"):
+        order_manager.get_period_order_statistics(
+            db_session,
+            days=0,
+        )

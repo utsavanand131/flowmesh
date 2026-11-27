@@ -1177,6 +1177,64 @@ def get_daily_order_trends(
 
 
 # -------------------------------------------------------------------
+# Admin order analytics - period overview
+# -------------------------------------------------------------------
+
+
+@app.get("/admin/orders/period-overview")
+def get_period_order_overview(
+    days: int = Query(default=7, ge=1),
+    current_user=Depends(require_admin_user),
+):
+    order_channel = grpc.insecure_channel("localhost:50051")
+    order_stub = order_pb2_grpc.OrderServiceStub(order_channel)
+
+    try:
+        response = order_stub.GetPeriodOrderStatistics(
+            order_pb2.GetPeriodOrderStatisticsRequest(
+                days=days,
+            )
+        )
+
+        return {
+            "days": days,
+            "total_orders": response.total_orders,
+            "pending_orders": response.pending_orders,
+            "confirmed_orders": response.confirmed_orders,
+            "processing_orders": response.processing_orders,
+            "delivered_orders": response.delivered_orders,
+            "completion_rate": response.completion_rate,
+        }
+
+    except grpc.RpcError as error:
+        print(
+            "Period order overview gRPC error:",
+            error.code(),
+            error.details(),
+        )
+
+        if error.code() == grpc.StatusCode.UNAVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Order service unavailable",
+            )
+
+        if error.code() == grpc.StatusCode.INVALID_ARGUMENT:
+            raise HTTPException(
+                status_code=400,
+                detail=error.details(),
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve period order overview",
+        )
+
+    finally:
+        order_channel.close()
+
+
+# -------------------------------------------------------------------
 # List inventory
 # -------------------------------------------------------------------
 

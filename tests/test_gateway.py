@@ -1188,3 +1188,132 @@ def test_order_trends_service_unavailable(
     assert response.json()["detail"] == "Order service unavailable"
 
     mock_channel.close.assert_called_once()
+
+
+# -------------------------------------------------------------------
+# Period order overview tests
+# -------------------------------------------------------------------
+
+
+def test_customer_cannot_access_period_order_overview(
+    authenticated_client,
+):
+    response = authenticated_client.get("/admin/orders/period-overview")
+
+    assert response.status_code == 403
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_admin_can_access_period_order_overview(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    mock_stub.GetPeriodOrderStatistics.return_value = MagicMock(
+        total_orders=12,
+        pending_orders=3,
+        confirmed_orders=2,
+        processing_orders=4,
+        delivered_orders=3,
+        completion_rate=25.0,
+    )
+
+    response = admin_client.get("/admin/orders/period-overview")
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "days": 7,
+        "total_orders": 12,
+        "pending_orders": 3,
+        "confirmed_orders": 2,
+        "processing_orders": 4,
+        "delivered_orders": 3,
+        "completion_rate": 25.0,
+    }
+
+    request = mock_stub.GetPeriodOrderStatistics.call_args.args[0]
+    assert request.days == 7
+
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_period_order_overview_supports_custom_days(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    mock_stub.GetPeriodOrderStatistics.return_value = MagicMock(
+        total_orders=20,
+        pending_orders=5,
+        confirmed_orders=4,
+        processing_orders=6,
+        delivered_orders=5,
+        completion_rate=25.0,
+    )
+
+    response = admin_client.get(
+        "/admin/orders/period-overview",
+        params={"days": 30},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["days"] == 30
+
+    request = mock_stub.GetPeriodOrderStatistics.call_args.args[0]
+    assert request.days == 30
+
+    mock_channel.close.assert_called_once()
+
+
+def test_period_order_overview_rejects_invalid_days(
+    admin_client,
+):
+    response = admin_client.get(
+        "/admin/orders/period-overview",
+        params={"days": 0},
+    )
+
+    assert response.status_code == 422
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.order_pb2_grpc.OrderServiceStub")
+def test_period_order_overview_service_unavailable(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    error = grpc.RpcError()
+    error.code = lambda: grpc.StatusCode.UNAVAILABLE
+    error.details = lambda: "Service unavailable"
+
+    mock_stub.GetPeriodOrderStatistics.side_effect = error
+
+    response = admin_client.get("/admin/orders/period-overview")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Order service unavailable"
+
+    mock_channel.close.assert_called_once()

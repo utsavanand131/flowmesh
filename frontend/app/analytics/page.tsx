@@ -29,6 +29,16 @@ interface OrderOverviewResponse {
   completion_rate: number;
 }
 
+interface PeriodOrderOverviewResponse {
+  days: number;
+  total_orders: number;
+  pending_orders: number;
+  confirmed_orders: number;
+  processing_orders: number;
+  delivered_orders: number;
+  completion_rate: number;
+}
+
 interface DailyOrderTrend {
   date: string;
   order_count: number;
@@ -40,6 +50,7 @@ interface OrderTrendsResponse {
 
 interface DashboardErrors {
   overview?: string;
+  periodOverview?: string;
   trends?: string;
 }
 
@@ -155,6 +166,9 @@ export default function AnalyticsPage() {
 
   const [overview, setOverview] = useState<OrderOverviewResponse | null>(null);
 
+  const [periodOverview, setPeriodOverview] =
+    useState<PeriodOrderOverviewResponse | null>(null);
+
   const [trends, setTrends] = useState<DailyOrderTrend[]>([]);
   const [dateRange, setDateRange] = useState<DateRange>(7);
 
@@ -178,6 +192,10 @@ export default function AnalyticsPage() {
         ),
         apiRequest<OrderTrendsResponse>(
           `/admin/orders/trends?days=${dateRange}`,
+          controller.signal,
+        ),
+        apiRequest<PeriodOrderOverviewResponse>(
+          `/admin/orders/period-overview?days=${dateRange}`,
           controller.signal,
         ),
       ]);
@@ -204,6 +222,15 @@ export default function AnalyticsPage() {
             : "Unable to load daily order trends.";
       }
 
+      if (results[2].status === "fulfilled") {
+        setPeriodOverview(results[2].value);
+      } else {
+        nextErrors.periodOverview =
+          results[2].reason instanceof Error
+            ? results[2].reason.message
+            : "Unable to load period order overview.";
+      }
+
       setErrors(nextErrors);
       setLoading(false);
     }
@@ -216,6 +243,7 @@ export default function AnalyticsPage() {
   function handleRefresh() {
     setRefreshKey((current) => current + 1);
   }
+
   const busiestDay = trends.reduce<DailyOrderTrend | null>(
     (busiest, current) =>
       !busiest || current.order_count > busiest.order_count ? current : busiest,
@@ -321,7 +349,7 @@ export default function AnalyticsPage() {
               </p>
             </div>
 
-            {/* KPI cards */}
+            {/* All-time order overview */}
             <section className="mb-9">
               <div className="mb-5">
                 <h2 className="text-lg font-semibold text-foreground">
@@ -378,6 +406,71 @@ export default function AnalyticsPage() {
                     label="Completion rate"
                     value={`${(overview?.completion_rate ?? 0).toFixed(2)}%`}
                     description="Delivered orders / total orders"
+                    icon="%"
+                    accent
+                  />
+                </div>
+              )}
+            </section>
+
+            {/* Period overview */}
+            <section className="mb-9">
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold text-foreground">
+                  Period overview
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Order statistics for the last {dateRange} days. Counts are
+                  based on orders created during this period.
+                </p>
+              </div>
+
+              <ErrorMessage message={errors.periodOverview} />
+
+              {loading && !periodOverview ? (
+                <LoadingState />
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <StatCard
+                    label="Orders created"
+                    value={periodOverview?.total_orders ?? 0}
+                    description={`Created in the last ${dateRange} days`}
+                    icon="▤"
+                    accent
+                  />
+
+                  <StatCard
+                    label="Pending"
+                    value={periodOverview?.pending_orders ?? 0}
+                    description="Currently awaiting confirmation"
+                    icon="◷"
+                  />
+
+                  <StatCard
+                    label="Confirmed"
+                    value={periodOverview?.confirmed_orders ?? 0}
+                    description="Currently confirmed"
+                    icon="✓"
+                  />
+
+                  <StatCard
+                    label="Processing"
+                    value={periodOverview?.processing_orders ?? 0}
+                    description="Currently being prepared"
+                    icon="⟳"
+                  />
+
+                  <StatCard
+                    label="Delivered"
+                    value={periodOverview?.delivered_orders ?? 0}
+                    description="Successfully delivered"
+                    icon="↗"
+                  />
+
+                  <StatCard
+                    label="Completion rate"
+                    value={`${(periodOverview?.completion_rate ?? 0).toFixed(2)}%`}
+                    description="Delivered orders / orders created in period"
                     icon="%"
                     accent
                   />

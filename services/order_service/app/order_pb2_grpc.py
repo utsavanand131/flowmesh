@@ -62,6 +62,12 @@ class OrderServiceStub:
             response_deserializer=order__pb2.GetOrderStatisticsResponse.FromString,
             _registered_method=True,
         )
+        self.GetPeriodOrderStatistics = channel.unary_unary(
+            "/order.OrderService/GetPeriodOrderStatistics",
+            request_serializer=order__pb2.GetPeriodOrderStatisticsRequest.SerializeToString,
+            response_deserializer=order__pb2.GetPeriodOrderStatisticsResponse.FromString,
+            _registered_method=True,
+        )
         self.GetDailyOrderTrends = channel.unary_unary(
             "/order.OrderService/GetDailyOrderTrends",
             request_serializer=order__pb2.GetDailyOrderTrendsRequest.SerializeToString,
@@ -97,6 +103,12 @@ class OrderServiceServicer:
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def GetPeriodOrderStatistics(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
     def GetDailyOrderTrends(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -125,6 +137,11 @@ def add_OrderServiceServicer_to_server(servicer, server):
             servicer.GetOrderStatistics,
             request_deserializer=order__pb2.GetOrderStatisticsRequest.FromString,
             response_serializer=order__pb2.GetOrderStatisticsResponse.SerializeToString,
+        ),
+        "GetPeriodOrderStatistics": grpc.unary_unary_rpc_method_handler(
+            servicer.GetPeriodOrderStatistics,
+            request_deserializer=order__pb2.GetPeriodOrderStatisticsRequest.FromString,
+            response_serializer=order__pb2.GetPeriodOrderStatisticsResponse.SerializeToString,
         ),
         "GetDailyOrderTrends": grpc.unary_unary_rpc_method_handler(
             servicer.GetDailyOrderTrends,
@@ -252,6 +269,36 @@ class OrderService:
             "/order.OrderService/GetOrderStatistics",
             order__pb2.GetOrderStatisticsRequest.SerializeToString,
             order__pb2.GetOrderStatisticsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def GetPeriodOrderStatistics(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/order.OrderService/GetPeriodOrderStatistics",
+            order__pb2.GetPeriodOrderStatisticsRequest.SerializeToString,
+            order__pb2.GetPeriodOrderStatisticsResponse.FromString,
             options,
             channel_credentials,
             insecure,
