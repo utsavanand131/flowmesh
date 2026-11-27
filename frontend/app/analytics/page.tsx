@@ -216,6 +216,11 @@ export default function AnalyticsPage() {
   function handleRefresh() {
     setRefreshKey((current) => current + 1);
   }
+  const busiestDay = trends.reduce<DailyOrderTrend | null>(
+    (busiest, current) =>
+      !busiest || current.order_count > busiest.order_count ? current : busiest,
+    null,
+  );
 
   if (!isAdmin) {
     return (
@@ -434,9 +439,21 @@ export default function AnalyticsPage() {
                         <p className="text-sm font-medium text-foreground">
                           Orders over time
                         </p>
+
                         <p className="mt-1 text-xs text-muted-foreground">
                           Showing {trends.length} daily data points
                         </p>
+
+                        {busiestDay && busiestDay.order_count > 0 && (
+                          <p className="mt-2 text-xs text-accent">
+                            Busiest day:{" "}
+                            <span className="font-semibold">
+                              {formatDateLabel(busiestDay.date, true)}
+                            </span>
+                            {" · "}
+                            {busiestDay.order_count} orders
+                          </p>
+                        )}
                       </div>
 
                       <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
