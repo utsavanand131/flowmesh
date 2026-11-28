@@ -1235,6 +1235,74 @@ def get_period_order_overview(
 
 
 # -------------------------------------------------------------------
+# Admin delivery analytics
+# -------------------------------------------------------------------
+
+
+@app.get("/admin/deliveries/analytics")
+def get_delivery_analytics(
+    days: int = Query(
+        default=7,
+        ge=1,
+        description="Analytics period: 7, 14, or 30 days",
+    ),
+    current_user=Depends(require_admin_user),
+):
+    channel = grpc.insecure_channel("localhost:50053")
+    stub = delivery_pb2_grpc.DeliveryServiceStub(channel)
+
+    try:
+        response = stub.GetDeliveryAnalytics(
+            delivery_pb2.GetDeliveryAnalyticsRequest(
+                days=days,
+            )
+        )
+
+        return {
+            "days": response.days,
+            "total_created": response.total_created,
+            "total_delivered": response.total_delivered,
+            "average_turnaround_hours": response.average_turnaround_hours,
+            "daily_analytics": [
+                {
+                    "date": day.date,
+                    "created_count": day.created_count,
+                    "delivered_count": day.delivered_count,
+                    "backlog_count": day.backlog_count,
+                }
+                for day in response.daily_analytics
+            ],
+        }
+
+    except grpc.RpcError as error:
+        print(
+            "Delivery analytics gRPC error:",
+            error.code(),
+            error.details(),
+        )
+
+        if error.code() == grpc.StatusCode.UNAVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Delivery service unavailable",
+            )
+
+        if error.code() == grpc.StatusCode.INVALID_ARGUMENT:
+            raise HTTPException(
+                status_code=400,
+                detail=error.details(),
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve delivery analytics",
+        )
+
+    finally:
+        channel.close()
+
+
+# -------------------------------------------------------------------
 # List inventory
 # -------------------------------------------------------------------
 

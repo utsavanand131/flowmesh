@@ -4,9 +4,11 @@ import uuid
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from datetime import datetime, time, timedelta, timezone
 
 from services.delivery_service.app.models import (
     Delivery,
+    DeliveryStatusHistory,
     OutboxEvent,
     ProcessedEvent,
 )
@@ -52,6 +54,14 @@ class DeliveryManager:
 
             db.flush()
 
+            # Record the initial delivery status.
+            history = DeliveryStatusHistory(
+                history_id=str(uuid.uuid4()),
+                delivery_id=delivery.delivery_id,
+                previous_status=None,
+                new_status="ASSIGNED",
+            )
+
             event = OutboxEvent(
                 event_id=str(uuid.uuid4()),
                 event_type="delivery.assigned",
@@ -71,9 +81,12 @@ class DeliveryManager:
                 aggregate_id=order_id,
             )
 
+            db.add(history)
             db.add(event)
             db.add(processed_event)
 
+            # Delivery, history, outbox and processed event
+            # are committed together.
             db.commit()
 
             db.refresh(delivery)
@@ -165,6 +178,183 @@ class DeliveryManager:
 
         return deliveries, total, status_counts
 
+    def get_delivery_analytics(
+        self,
+        db: Session,
+        days: int = 7,
+    ):
+        """
+        Calculate delivery analytics for the selected period.
+
+        Backlog represents deliveries created within the selected
+        period that had not yet been delivered at the end of each day.
+
+        Turnaround is calculated only when both ASSIGNED and
+        DELIVERED history timestamps are available.
+        """
+
+        if days not in {7, 14, 30}:
+            raise ValueError("days must be 7, 14, or 30")
+
+        today = datetime.now(timezone.utc).date()
+        start_date = today - timedelta(days=days - 1)
+        end_date = today + timedelta(days=1)
+
+        start_datetime = datetime.combine(
+            start_date,
+            time.min,
+            tzinfo=timezone.utc,
+        )
+
+        end_datetime = datetime.combine(
+            end_date,
+            time.min,
+            tzinfo=timezone.utc,
+        )
+
+        def utc_date(value: datetime):
+            if value.tzinfo is None:
+                return value.date()
+
+            return value.astimezone(timezone.utc).date()
+
+        # Fetch deliveries created during the selected period.
+        created_deliveries = (
+            db.query(Delivery)
+            .filter(
+                Delivery.created_at >= start_datetime,
+                Delivery.created_at < end_datetime,
+            )
+            .all()
+        )
+
+        cohort_delivery_ids = {delivery.delivery_id for delivery in created_deliveries}
+
+        # Fetch deliveries completed during the selected period.
+        delivered_history = (
+            db.query(DeliveryStatusHistory)
+            .filter(
+                DeliveryStatusHistory.new_status == "DELIVERED",
+                DeliveryStatusHistory.changed_at >= start_datetime,
+                DeliveryStatusHistory.changed_at < end_datetime,
+            )
+            .order_by(DeliveryStatusHistory.changed_at.asc())
+            .all()
+        )
+
+        # Keep one completion timestamp per delivery.
+        delivered_at_by_id = {}
+
+        for record in delivered_history:
+            delivered_at_by_id.setdefault(
+                record.delivery_id,
+                record.changed_at,
+            )
+
+        # Fetch assignment timestamps for deliveries completed
+        # during this period.
+        delivered_ids = list(delivered_at_by_id.keys())
+
+        assigned_at_by_id = {}
+
+        if delivered_ids:
+            assigned_history = (
+                db.query(DeliveryStatusHistory)
+                .filter(
+                    DeliveryStatusHistory.delivery_id.in_(delivered_ids),
+                    DeliveryStatusHistory.new_status == "ASSIGNED",
+                )
+                .order_by(DeliveryStatusHistory.changed_at.asc())
+                .all()
+            )
+
+            for record in assigned_history:
+                assigned_at_by_id.setdefault(
+                    record.delivery_id,
+                    record.changed_at,
+                )
+
+        # Group daily activity.
+        created_by_date = {}
+        delivered_by_date = {}
+
+        for delivery in created_deliveries:
+            delivery_date = utc_date(delivery.created_at)
+
+            created_by_date[delivery_date] = created_by_date.get(delivery_date, 0) + 1
+
+        for delivery_id, delivered_at in delivered_at_by_id.items():
+            delivered_date = utc_date(delivered_at)
+
+            delivered_by_date[delivered_date] = (
+                delivered_by_date.get(delivered_date, 0) + 1
+            )
+
+        # Calculate average turnaround using only complete
+        # assignment-to-delivery timestamp pairs.
+        turnaround_hours = []
+
+        for delivery_id, delivered_at in delivered_at_by_id.items():
+            assigned_at = assigned_at_by_id.get(delivery_id)
+
+            if assigned_at is None:
+                continue
+
+            turnaround = (delivered_at - assigned_at).total_seconds() / 3600
+
+            if turnaround >= 0:
+                turnaround_hours.append(turnaround)
+
+        average_turnaround_hours = (
+            sum(turnaround_hours) / len(turnaround_hours) if turnaround_hours else 0.0
+        )
+
+        # Calculate daily backlog for deliveries created within
+        # this selected period.
+        daily_analytics = []
+
+        cumulative_created = 0
+        cumulative_delivered = 0
+
+        for offset in range(days):
+            current_date = start_date + timedelta(days=offset)
+
+            created_count = created_by_date.get(current_date, 0)
+            delivered_count = delivered_by_date.get(current_date, 0)
+
+            cumulative_created += created_count
+
+            # Only count completions belonging to deliveries
+            # created during the selected period.
+            for delivery_id, delivered_at in delivered_at_by_id.items():
+                if delivery_id not in cohort_delivery_ids:
+                    continue
+
+                if utc_date(delivered_at) == current_date:
+                    cumulative_delivered += 1
+
+            backlog_count = max(
+                cumulative_created - cumulative_delivered,
+                0,
+            )
+
+            daily_analytics.append(
+                {
+                    "date": current_date.isoformat(),
+                    "created_count": created_count,
+                    "delivered_count": delivered_count,
+                    "backlog_count": backlog_count,
+                }
+            )
+
+        return {
+            "days": days,
+            "total_created": len(created_deliveries),
+            "total_delivered": len(delivered_at_by_id),
+            "average_turnaround_hours": average_turnaround_hours,
+            "daily_analytics": daily_analytics,
+        }
+
     def update_delivery_status(
         self,
         db: Session,
@@ -194,9 +384,20 @@ class DeliveryManager:
         if new_status not in allowed_transitions[current_status]:
             return None, "INVALID_TRANSITION"
 
-        delivery.status = new_status
-
         try:
+            # Update the current delivery status.
+            delivery.status = new_status
+
+            # Record the successful status transition.
+            history = DeliveryStatusHistory(
+                history_id=str(uuid.uuid4()),
+                delivery_id=delivery.delivery_id,
+                previous_status=current_status,
+                new_status=new_status,
+            )
+
+            db.add(history)
+
             db.flush()
 
             event = OutboxEvent(
@@ -214,6 +415,7 @@ class DeliveryManager:
 
             db.add(event)
 
+            # Status, history and outbox event are atomic.
             db.commit()
 
             db.refresh(delivery)

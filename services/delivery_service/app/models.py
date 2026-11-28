@@ -1,7 +1,15 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from services.delivery_service.app.database import Base
@@ -32,6 +40,46 @@ class Delivery(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+
+class DeliveryStatusHistory(Base):
+    __tablename__ = "delivery_status_history"
+
+    history_id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+
+    delivery_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("deliveries.delivery_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    previous_status: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    new_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_delivery_status_history_delivery_changed",
+            "delivery_id",
+            "changed_at",
+        ),
     )
 
 

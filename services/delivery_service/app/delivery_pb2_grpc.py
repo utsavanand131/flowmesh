@@ -4,7 +4,7 @@
 import grpc
 import warnings
 
-from . import delivery_pb2 as delivery__pb2
+from services.delivery_service.app import delivery_pb2 as delivery__pb2
 
 GRPC_GENERATED_VERSION = "1.83.1"
 GRPC_VERSION = grpc.__version__
@@ -68,6 +68,12 @@ class DeliveryServiceStub:
             response_deserializer=delivery__pb2.ListDeliveriesResponse.FromString,
             _registered_method=True,
         )
+        self.GetDeliveryAnalytics = channel.unary_unary(
+            "/delivery.DeliveryService/GetDeliveryAnalytics",
+            request_serializer=delivery__pb2.GetDeliveryAnalyticsRequest.SerializeToString,
+            response_deserializer=delivery__pb2.GetDeliveryAnalyticsResponse.FromString,
+            _registered_method=True,
+        )
 
 
 class DeliveryServiceServicer:
@@ -103,6 +109,12 @@ class DeliveryServiceServicer:
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def GetDeliveryAnalytics(self, request, context):
+        """Additional delivery analytics RPC"""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
 
 def add_DeliveryServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -130,6 +142,11 @@ def add_DeliveryServiceServicer_to_server(servicer, server):
             servicer.ListDeliveries,
             request_deserializer=delivery__pb2.ListDeliveriesRequest.FromString,
             response_serializer=delivery__pb2.ListDeliveriesResponse.SerializeToString,
+        ),
+        "GetDeliveryAnalytics": grpc.unary_unary_rpc_method_handler(
+            servicer.GetDeliveryAnalytics,
+            request_deserializer=delivery__pb2.GetDeliveryAnalyticsRequest.FromString,
+            response_serializer=delivery__pb2.GetDeliveryAnalyticsResponse.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -284,6 +301,36 @@ class DeliveryService:
             "/delivery.DeliveryService/ListDeliveries",
             delivery__pb2.ListDeliveriesRequest.SerializeToString,
             delivery__pb2.ListDeliveriesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def GetDeliveryAnalytics(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/delivery.DeliveryService/GetDeliveryAnalytics",
+            delivery__pb2.GetDeliveryAnalyticsRequest.SerializeToString,
+            delivery__pb2.GetDeliveryAnalyticsResponse.FromString,
             options,
             channel_credentials,
             insecure,

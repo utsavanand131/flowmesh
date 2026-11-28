@@ -178,6 +178,56 @@ class DeliveryService(delivery_pb2_grpc.DeliveryServiceServicer):
         finally:
             db.close()
 
+    def GetDeliveryAnalytics(self, request, context):
+        db = SessionLocal()
+
+        try:
+            if request.days not in {7, 14, 30}:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("Days must be 7, 14, or 30")
+
+                return delivery_pb2.GetDeliveryAnalyticsResponse()
+
+            analytics = delivery_manager.get_delivery_analytics(
+                db=db,
+                days=request.days,
+            )
+
+            return delivery_pb2.GetDeliveryAnalyticsResponse(
+                days=analytics["days"],
+                total_created=analytics["total_created"],
+                total_delivered=analytics["total_delivered"],
+                average_turnaround_hours=analytics["average_turnaround_hours"],
+                daily_analytics=[
+                    delivery_pb2.DailyDeliveryAnalytics(
+                        date=day["date"],
+                        created_count=day["created_count"],
+                        delivered_count=day["delivered_count"],
+                        backlog_count=day["backlog_count"],
+                    )
+                    for day in analytics["daily_analytics"]
+                ],
+            )
+
+        except SQLAlchemyError:
+            db.rollback()
+
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Failed to retrieve delivery analytics")
+
+            return delivery_pb2.GetDeliveryAnalyticsResponse()
+
+        except Exception:
+            db.rollback()
+
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Unexpected error retrieving delivery analytics")
+
+            return delivery_pb2.GetDeliveryAnalyticsResponse()
+
+        finally:
+            db.close()
+
     def UpdateDeliveryStatus(self, request, context):
         db = SessionLocal()
 

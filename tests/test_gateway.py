@@ -1317,3 +1317,178 @@ def test_period_order_overview_service_unavailable(
     assert response.json()["detail"] == "Order service unavailable"
 
     mock_channel.close.assert_called_once()
+
+
+# -------------------------------------------------------------------
+# Delivery analytics tests
+# -------------------------------------------------------------------
+
+
+def test_customer_cannot_access_delivery_analytics(authenticated_client):
+    response = authenticated_client.get("/admin/deliveries/analytics")
+
+    assert response.status_code == 403
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.delivery_pb2_grpc.DeliveryServiceStub")
+def test_admin_can_access_delivery_analytics(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    mock_stub.GetDeliveryAnalytics.return_value = MagicMock(
+        days=7,
+        total_created=12,
+        total_delivered=8,
+        average_turnaround_hours=5.5,
+        daily_analytics=[
+            MagicMock(
+                date="2026-11-24",
+                created_count=3,
+                delivered_count=2,
+                backlog_count=1,
+            ),
+            MagicMock(
+                date="2026-11-25",
+                created_count=2,
+                delivered_count=3,
+                backlog_count=0,
+            ),
+        ],
+    )
+
+    response = admin_client.get("/admin/deliveries/analytics")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "days": 7,
+        "total_created": 12,
+        "total_delivered": 8,
+        "average_turnaround_hours": 5.5,
+        "daily_analytics": [
+            {
+                "date": "2026-11-24",
+                "created_count": 3,
+                "delivered_count": 2,
+                "backlog_count": 1,
+            },
+            {
+                "date": "2026-11-25",
+                "created_count": 2,
+                "delivered_count": 3,
+                "backlog_count": 0,
+            },
+        ],
+    }
+
+    request = mock_stub.GetDeliveryAnalytics.call_args.args[0]
+    assert request.days == 7
+
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.delivery_pb2_grpc.DeliveryServiceStub")
+def test_delivery_analytics_supports_custom_days(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+    mock_stub.GetDeliveryAnalytics.return_value = MagicMock(
+        days=30,
+        total_created=40,
+        total_delivered=32,
+        average_turnaround_hours=6.25,
+        daily_analytics=[],
+    )
+
+    response = admin_client.get(
+        "/admin/deliveries/analytics",
+        params={"days": 30},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["days"] == 30
+
+    request = mock_stub.GetDeliveryAnalytics.call_args.args[0]
+    assert request.days == 30
+
+    mock_channel.close.assert_called_once()
+
+
+def test_delivery_analytics_rejects_invalid_days(admin_client):
+    response = admin_client.get(
+        "/admin/deliveries/analytics",
+        params={"days": 0},
+    )
+
+    assert response.status_code == 422
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.delivery_pb2_grpc.DeliveryServiceStub")
+def test_delivery_analytics_rejects_unsupported_period(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    error = grpc.RpcError()
+    error.code = lambda: grpc.StatusCode.INVALID_ARGUMENT
+    error.details = lambda: "Days must be 7, 14, or 30"
+
+    mock_stub.GetDeliveryAnalytics.side_effect = error
+
+    response = admin_client.get(
+        "/admin/deliveries/analytics",
+        params={"days": 10},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Days must be 7, 14, or 30"
+
+    mock_channel.close.assert_called_once()
+
+
+@patch("gateway.app.main.grpc.insecure_channel")
+@patch("gateway.app.main.delivery_pb2_grpc.DeliveryServiceStub")
+def test_delivery_analytics_service_unavailable(
+    mock_stub_class,
+    mock_channel_factory,
+    admin_client,
+):
+    mock_channel = MagicMock()
+    mock_channel_factory.return_value = mock_channel
+
+    mock_stub = MagicMock()
+    mock_stub_class.return_value = mock_stub
+
+    error = grpc.RpcError()
+    error.code = lambda: grpc.StatusCode.UNAVAILABLE
+    error.details = lambda: "Service unavailable"
+
+    mock_stub.GetDeliveryAnalytics.side_effect = error
+
+    response = admin_client.get("/admin/deliveries/analytics")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Delivery service unavailable"
+
+    mock_channel.close.assert_called_once()

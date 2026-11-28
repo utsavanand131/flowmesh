@@ -18,6 +18,10 @@ service DeliveryService {
 
     rpc ListDeliveries(ListDeliveriesRequest)
         returns (ListDeliveriesResponse);
+
+    // Additional delivery analytics RPC
+    rpc GetDeliveryAnalytics(GetDeliveryAnalyticsRequest)
+        returns (GetDeliveryAnalyticsResponse);
 }
 
 message CreateDeliveryRequest {
@@ -84,4 +88,41 @@ message ListDeliveriesResponse {
     int32 picked_up_count = 6;
     int32 in_transit_count = 7;
     int32 delivered_count = 8;
+}
+
+// ------------------------------------------
+// Delivery Analytics
+// ------------------------------------------
+
+message GetDeliveryAnalyticsRequest {
+    // Supported values: 7, 14, or 30 days
+    int32 days = 1;
+}
+
+message DailyDeliveryAnalytics {
+    // Date in YYYY-MM-DD format
+    string date = 1;
+
+    // Deliveries created on this date
+    int32 created_count = 2;
+
+    // Deliveries completed on this date
+    int32 delivered_count = 3;
+
+    // Outstanding deliveries at the end of this date
+    int32 backlog_count = 4;
+}
+
+message GetDeliveryAnalyticsResponse {
+    int32 days = 1;
+
+    // Period totals
+    int32 total_created = 2;
+    int32 total_delivered = 3;
+
+    // Average time from assignment to delivery, in hours
+    double average_turnaround_hours = 4;
+
+    // Daily analytics points
+    repeated DailyDeliveryAnalytics daily_analytics = 5;
 }
