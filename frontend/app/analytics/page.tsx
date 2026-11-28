@@ -48,10 +48,26 @@ interface OrderTrendsResponse {
   trends: DailyOrderTrend[];
 }
 
+interface DailyDeliveryAnalytics {
+  date: string;
+  created_count: number;
+  delivered_count: number;
+  backlog_count: number;
+}
+
+interface DeliveryAnalyticsResponse {
+  days: number;
+  total_created: number;
+  total_delivered: number;
+  average_turnaround_hours: number;
+  daily_analytics: DailyDeliveryAnalytics[];
+}
+
 interface DashboardErrors {
   overview?: string;
   periodOverview?: string;
   trends?: string;
+  deliveryAnalytics?: string;
 }
 
 async function apiRequest<T>(path: string, signal: AbortSignal): Promise<T> {
@@ -170,6 +186,8 @@ export default function AnalyticsPage() {
     useState<PeriodOrderOverviewResponse | null>(null);
 
   const [trends, setTrends] = useState<DailyOrderTrend[]>([]);
+  const [deliveryAnalytics, setDeliveryAnalytics] =
+    useState<DeliveryAnalyticsResponse | null>(null);
   const [dateRange, setDateRange] = useState<DateRange>(7);
 
   const [errors, setErrors] = useState<DashboardErrors>({});
@@ -196,6 +214,10 @@ export default function AnalyticsPage() {
         ),
         apiRequest<PeriodOrderOverviewResponse>(
           `/admin/orders/period-overview?days=${dateRange}`,
+          controller.signal,
+        ),
+        apiRequest<DeliveryAnalyticsResponse>(
+          `/admin/deliveries/analytics?days=${dateRange}`,
           controller.signal,
         ),
       ]);
@@ -231,6 +253,15 @@ export default function AnalyticsPage() {
             : "Unable to load period order overview.";
       }
 
+      if (results[3].status === "fulfilled") {
+        setDeliveryAnalytics(results[3].value);
+      } else {
+        nextErrors.deliveryAnalytics =
+          results[3].reason instanceof Error
+            ? results[3].reason.message
+            : "Unable to load delivery analytics.";
+      }
+
       setErrors(nextErrors);
       setLoading(false);
     }
@@ -264,7 +295,7 @@ export default function AnalyticsPage() {
             </h1>
 
             <p className="mt-2 text-sm text-muted-foreground">
-              Order Analytics is only available to FlowMesh administrators.
+              Analytics is only available to FlowMesh administrators.
             </p>
 
             <Link
@@ -324,7 +355,7 @@ export default function AnalyticsPage() {
                   </p>
 
                   <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-                    Order Analytics
+                    Operations Analytics
                   </h1>
                 </div>
               </div>
@@ -344,8 +375,8 @@ export default function AnalyticsPage() {
 
             <div className="mb-8">
               <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-                Track order performance, monitor completion rates, and
-                understand daily order activity across FlowMesh.
+                Track order and delivery performance, monitor completion, and
+                understand operational trends across FlowMesh.
               </p>
             </div>
 
@@ -649,9 +680,237 @@ export default function AnalyticsPage() {
               </div>
             </section>
 
+            {/* Delivery analytics */}
+            <section className="mb-9">
+              <div className="mb-5">
+                <h2 className="text-lg font-semibold text-foreground">
+                  Delivery analytics
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Historical delivery activity for the last {dateRange} days.
+                  These insights complement the current delivery status metrics
+                  on the Deliveries page.
+                </p>
+              </div>
+
+              <ErrorMessage message={errors.deliveryAnalytics} />
+
+              {loading && !deliveryAnalytics ? (
+                <LoadingState />
+              ) : deliveryAnalytics ? (
+                <>
+                  <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    <StatCard
+                      label="Deliveries created"
+                      value={deliveryAnalytics.total_created}
+                      description={`Created in the last ${dateRange} days`}
+                      icon="▤"
+                      accent
+                    />
+
+                    <StatCard
+                      label="Deliveries completed"
+                      value={deliveryAnalytics.total_delivered}
+                      description="Moved to DELIVERED during this period"
+                      icon="✓"
+                    />
+
+                    <StatCard
+                      label="Average turnaround"
+                      value={
+                        deliveryAnalytics.average_turnaround_hours > 0
+                          ? `${deliveryAnalytics.average_turnaround_hours.toFixed(1)}h`
+                          : "—"
+                      }
+                      description="Based on recorded assignment and delivery timestamps"
+                      icon="◷"
+                    />
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-surface p-4 sm:p-6">
+                    {deliveryAnalytics.daily_analytics.length === 0 ? (
+                      <div className="flex min-h-[320px] items-center justify-center text-center">
+                        <div>
+                          <p className="font-medium text-foreground">
+                            No delivery trend data available
+                          </p>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            Daily delivery activity will appear here when data
+                            is available.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mb-5">
+                          <p className="text-sm font-medium text-foreground">
+                            Delivery activity and backlog
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Daily deliveries created, completed, and remaining
+                            from deliveries created during this period.
+                          </p>
+                        </div>
+
+                        <div className="mb-5 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full bg-[#6ba6a0]" />
+                            Created
+                          </span>
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full bg-[#8b9bd7]" />
+                            Delivered
+                          </span>
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full bg-[#d6a85f]" />
+                            Period backlog
+                          </span>
+                        </div>
+
+                        <div className="h-[340px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart
+                              data={deliveryAnalytics.daily_analytics}
+                              margin={{
+                                top: 10,
+                                right: 12,
+                                left: -18,
+                                bottom: 5,
+                              }}
+                            >
+                              <CartesianGrid
+                                stroke="#292e34"
+                                strokeDasharray="4 4"
+                                vertical={false}
+                              />
+
+                              <XAxis
+                                dataKey="date"
+                                tickFormatter={(value) =>
+                                  formatDateLabel(String(value))
+                                }
+                                tick={{ fill: "#858d97", fontSize: 11 }}
+                                axisLine={{ stroke: "#292e34" }}
+                                tickLine={false}
+                                minTickGap={20}
+                              />
+
+                              <YAxis
+                                allowDecimals={false}
+                                tick={{ fill: "#858d97", fontSize: 11 }}
+                                axisLine={false}
+                                tickLine={false}
+                                width={45}
+                              />
+
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: "#171a1e",
+                                  border: "1px solid #292e34",
+                                  borderRadius: "10px",
+                                  color: "#e6e8eb",
+                                  fontSize: "12px",
+                                }}
+                                labelStyle={{
+                                  color: "#a5acb5",
+                                  marginBottom: "4px",
+                                }}
+                                formatter={(value, name) => [
+                                  Number(value).toLocaleString(),
+                                  String(name),
+                                ]}
+                                labelFormatter={(label) =>
+                                  formatDateLabel(String(label), true)
+                                }
+                                cursor={{
+                                  stroke: "#6ba6a0",
+                                  strokeDasharray: "4 4",
+                                }}
+                              />
+
+                              <Line
+                                type="monotone"
+                                dataKey="created_count"
+                                name="Created"
+                                stroke="#6ba6a0"
+                                strokeWidth={2.5}
+                                dot={{
+                                  r: 3,
+                                  fill: "#6ba6a0",
+                                  stroke: "#171a1e",
+                                  strokeWidth: 2,
+                                }}
+                                activeDot={{
+                                  r: 6,
+                                  fill: "#83b9b2",
+                                  stroke: "#171a1e",
+                                  strokeWidth: 2,
+                                }}
+                              />
+
+                              <Line
+                                type="monotone"
+                                dataKey="delivered_count"
+                                name="Delivered"
+                                stroke="#8b9bd7"
+                                strokeWidth={2.5}
+                                dot={{
+                                  r: 3,
+                                  fill: "#8b9bd7",
+                                  stroke: "#171a1e",
+                                  strokeWidth: 2,
+                                }}
+                                activeDot={{
+                                  r: 6,
+                                  fill: "#aab6e8",
+                                  stroke: "#171a1e",
+                                  strokeWidth: 2,
+                                }}
+                              />
+
+                              <Line
+                                type="monotone"
+                                dataKey="backlog_count"
+                                name="Period backlog"
+                                stroke="#d6a85f"
+                                strokeWidth={2.5}
+                                dot={{
+                                  r: 3,
+                                  fill: "#d6a85f",
+                                  stroke: "#171a1e",
+                                  strokeWidth: 2,
+                                }}
+                                activeDot={{
+                                  r: 6,
+                                  fill: "#e5bd7d",
+                                  stroke: "#171a1e",
+                                  strokeWidth: 2,
+                                }}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <p className="mt-4 text-xs leading-5 text-muted-foreground">
+                          Backlog represents deliveries created within the
+                          selected period that had not yet been completed by
+                          each date. Average turnaround excludes deliveries
+                          without recorded assignment and delivery timestamps.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-xl border border-border bg-surface p-6 text-sm text-muted-foreground">
+                  Delivery analytics are currently unavailable.
+                </div>
+              )}
+            </section>
+
             <footer className="border-t border-border py-5 text-xs text-muted-foreground">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p>FlowMesh Order Analytics</p>
+                <p>FlowMesh Operations Analytics</p>
                 <p>Reporting period: Last {dateRange} days</p>
               </div>
             </footer>
